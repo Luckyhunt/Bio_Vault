@@ -51,13 +51,11 @@ export async function POST(request: Request) {
       const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
       const email = `${cleanUsername}@biovault.local`;
 
-      // Store public key as base64 — reliable cross-platform encoding.
-      // DO NOT use hex: Buffer.from(Uint8Array).toString('hex') may produce empty string on Vercel.
+      // 4. Derive Public Key Encoding (Base64 is most robust for DB storage)
       const publicKeyB64 = Buffer.from(credentialPublicKey).toString('base64');
-      // Derive wallet address from last 20 bytes of the public key
       const walletAddress = `0x${Buffer.from(credentialPublicKey).slice(-20).toString('hex')}` as `0x${string}`;
 
-      console.log('[Register] Public key bytes:', credentialPublicKey.length, '| B64 length:', publicKeyB64.length);
+      console.log(`[Register] Creating vault for ${cleanUsername} | Wallet: ${walletAddress}`);
 
       // Check if this username is truly taken (vs orphaned auth user with no passkey)
       const { data: existingProfile } = await supabaseAdmin

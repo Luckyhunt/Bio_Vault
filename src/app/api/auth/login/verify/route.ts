@@ -63,23 +63,14 @@ export async function POST(request: Request) {
     // 3. Verify WebAuthn authentication
     let verification;
     try {
-      // SMART DECODER: Handles old hex keys and new base64/base64url keys
-      const decodePublicKey = (key: string): Buffer => {
-        // Hex keys are typically 0-9, a-f and an even length
-        if (/^[0-9a-fA-F]+$/.test(key) && key.length % 2 === 0) {
-          return Buffer.from(key, 'hex');
-        }
-        // Fallback to base64url or base64
-        return Buffer.from(key, 'base64');
-      };
-
-      const publicKeyBytes = decodePublicKey(passkey.public_key);
-      console.log('[Login] Decoded key length:', publicKeyBytes.length, '| Raw value:', passkey.public_key.substring(0, 10) + '...');
+      // PRO-GRADE DECODER: Explicitly handles Base64 keys
+      const publicKeyBytes = new Uint8Array(Buffer.from(passkey.public_key, 'base64'));
+      console.log(`[Login] Authenticating ${cleanUsername} | Key Length: ${publicKeyBytes.length}`);
 
       if (!publicKeyBytes || publicKeyBytes.length === 0) {
         return NextResponse.json({
-          error: 'Vault key data is corrupted. Please re-register.',
-          debug_hint: `Could not decode key for passkey: ${passkey.id}`
+          error: 'Vault key data is corrupted',
+          debug_hint: `Zero length key for id: ${passkey.id}`
         }, { status: 400 });
       }
 
