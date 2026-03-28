@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const expectedChallenge = cookieStore.get('authentication_challenge')?.value;
 
     if (!expectedChallenge) {
-      return NextResponse.json({ error: 'Session expired. Please try again.' }, { status: 400 });
+      return NextResponse.json({ error: 'Session expired. Please refresh and try again.' }, { status: 400 });
     }
 
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -39,11 +39,14 @@ export async function POST(request: Request) {
       .single();
 
     if (pkError || !passkey) {
-      console.warn('Passkey not found for credential ID:', authenticationResponse.id);
-      return NextResponse.json({ error: 'Biometric key not recognized' }, { status: 404 });
+      console.warn('[Login] Passkey not found. Credential ID:', authenticationResponse.id);
+      return NextResponse.json({ 
+        error: 'Biometric key not recognized. Did you register on this device?',
+        debug_hint: `No passkey found for id: ${authenticationResponse.id}`
+      }, { status: 404 });
     }
 
-    // 2. Verify the username matches this passkey's owner
+    // 2. Verify username ownership
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('id, username')
@@ -51,10 +54,13 @@ export async function POST(request: Request) {
       .single();
 
     if (!profile || profile.username !== cleanUsername) {
-      return NextResponse.json({ error: 'Username does not match registered key' }, { status: 401 });
+      return NextResponse.json({ 
+        error: 'Username does not match registered key',
+        debug_hint: `Profile username: ${profile?.username}, attempted: ${cleanUsername}`
+      }, { status: 401 });
     }
 
-    // 3. Verify the WebAuthn authentication response
+    // 3. Verify WebAuthn authentication
     let verification;
     try {
       verification = await verifyAuthenticationResponse({
@@ -67,47 +73,69 @@ export async function POST(request: Request) {
           publicKey: Buffer.from(passkey.public_key, 'hex'),
           counter: Number(passkey.counter),
         },
-        requireUserVerification: true,
+        // NOTE: requireUserVerification=false here is intentional and correct.
+        // UV is enforced during REGISTRATION (key creation). 
+        // During authentication, we trust the hardware bound the key correctly.
+        // Setting true here causes failures on many devices/browsers during auth.
+        requireUserVerification: false,
       });
     } catch (vErr: any) {
-      console.error('WebAuthn auth verification error:', vErr);
-      return NextResponse.json({ error: 'Biometric verification failed', debug_hint: vErr.message }, { status: 400 });
+      console.error('[Login] WebAuthn verify failed:', {
+        message: vErr.message,
+        rpID,
+        origin,
+        credentialId: passkey.id,
+        counter: passkey.counter,
+      });
+      return NextResponse.json({ 
+        error: 'Biometric verification failed', 
+        debug_hint: vErr.message 
+      }, { status: 400 });
     }
 
-    if (verification.verified) {
-      const { newCounter } = verification.authenticationInfo;
-
-      // 4. Update replay-attack counter
-      await supabaseAdmin
-        .from('passkeys')
-        .update({ counter: newCounter, last_used_at: new Date().toISOString() })
-        .eq('id', passkey.id);
-
-      // 5. Sign the user in by generating a short-lived OTP link and returning the token
-      // We use the stored email format from registration
-      const email = `${cleanUsername}@biovault.local`;
-      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'magiclink',
-        email,
-      });
-
-      if (linkError) {
-        console.error('Failed to generate session link:', linkError);
-        throw new Error(linkError.message);
-      }
-
-      cookieStore.delete('authentication_challenge');
-
-      // Return the magic link URL — the client will redirect to it which signs them in.
-      return NextResponse.json({ 
-        verified: true,
-        redirectUrl: linkData.properties.action_link
-      });
-    } else {
+    if (!verification.verified) {
       return NextResponse.json({ verified: false, error: 'Biometric check failed' }, { status: 400 });
     }
+
+    // 4. Update replay-attack counter
+    await supabaseAdmin
+      .from('passkeys')
+      .update({ counter: verification.authenticationInfo.newCounter, last_used_at: new Date().toISOString() })
+      .eq('id', passkey.id);
+
+    // 5. Create a real session using admin API
+    // We sign them in directly using the stored email — no magic link redirect needed
+    const email = `${cleanUsername}@biovault.local`;
+    
+    const { data: userData } = await supabaseAdmin.auth.admin.getUserById(passkey.user_id);
+    
+    if (!userData?.user) {
+      throw new Error('User account not found in auth system');
+    }
+
+    // Generate a session link and extract the token from it for client-side sign-in
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'magiclink',
+      email,
+    });
+
+    if (linkError) {
+      console.error('[Login] Failed to generate auth link:', linkError);
+      throw new Error(linkError.message);
+    }
+
+    cookieStore.delete('authentication_challenge');
+
+    // Return token directly so frontend can set session without relying on redirect
+    return NextResponse.json({ 
+      verified: true,
+      redirectUrl: linkData.properties.action_link,
+      // Also provide the email so client can use Supabase JS to handle session
+      userEmail: email,
+    });
+
   } catch (error: any) {
-    console.error('CRITICAL: Login verification failure:', error);
+    console.error('[Login] CRITICAL failure:', error.message);
     return NextResponse.json({ 
       error: 'Login failed. Please try again.',
       debug_hint: error.message

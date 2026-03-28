@@ -41,15 +41,16 @@ export default function AuthPanel() {
       });
 
       const verification = await verifyResp.json();
+      console.log('[Login] Verify response:', verification);
 
       if (verification.verified && verification.redirectUrl) {
-        // Redirect to the magic link which signs the user in
         window.location.href = verification.redirectUrl;
       } else {
-        throw new Error(verification.error || 'Login failed');
+        const hint = verification.debug_hint ? ` [${verification.debug_hint}]` : '';
+        throw new Error((verification.error || 'Login failed') + hint);
       }
     } catch (err: any) {
-      console.error(err);
+      console.error('[Login] Error:', err);
       setErrorMsg(err.message || 'Authentication failed');
     } finally {
       setIsLoading(false);
