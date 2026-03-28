@@ -23,10 +23,9 @@ export default function Dashboard({ user }: { user: any }) {
   const [address, setAddress] = useState('0x...');
 
   useEffect(() => {
-    // Fetch user profile and wallet address from Supabase
     const fetchProfile = async () => {
-      // Logic to get profile.wallet_address
-      setAddress(user?.user_metadata?.wallet_address || '0x742d...41b0');
+      const addr = user?.user_metadata?.wallet_address;
+      setAddress(addr || 'Generating...');
     };
     fetchProfile();
   }, [user]);
