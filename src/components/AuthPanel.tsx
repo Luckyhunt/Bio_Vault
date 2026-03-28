@@ -29,7 +29,7 @@ export default function AuthPanel() {
 
       if (options.error) throw new Error(options.error);
 
-      const authenticationResponse = await startAuthentication(options);
+      const authenticationResponse = await startAuthentication({ optionsJSON: options });
 
       const verifyResp = await fetch('/api/auth/login/verify', {
         method: 'POST',
