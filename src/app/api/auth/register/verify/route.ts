@@ -3,6 +3,7 @@ import { verifyRegistrationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { toBase64URL } from '@/lib/encoding';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -51,11 +52,12 @@ export async function POST(request: Request) {
       const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
       const email = `${cleanUsername}@biovault.local`;
 
-      // 4. Derive Public Key Encoding (Base64 is most robust for DB storage)
-      const publicKeyB64 = Buffer.from(credentialPublicKey).toString('base64');
+      // 4. Encode & Store Public Key (Base64URL Vaccine)
+      // This is the most robust way to avoid data corruption in Vercel/Node edge environments.
+      const publicKeyB64URL = toBase64URL(credentialPublicKey);
       const walletAddress = `0x${Buffer.from(credentialPublicKey).slice(-20).toString('hex')}` as `0x${string}`;
 
-      console.log(`[Register] Creating vault for ${cleanUsername} | Wallet: ${walletAddress}`);
+      console.log(`[Register] Creating vault for ${cleanUsername} | PK B64URL: ${publicKeyB64URL.substring(0, 20)}...`);
 
       // Check if this username is truly taken (vs orphaned auth user with no passkey)
       const { data: existingProfile } = await supabaseAdmin
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
         .insert({
           id: credentialID,
           user_id: userId,
-          public_key: publicKeyB64,
+          public_key: publicKeyB64URL,
           counter,
           device_type: verification.registrationInfo.credentialDeviceType || 'single_device',
           transports: attestationResponse.response.transports || [],

@@ -3,6 +3,7 @@ import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
+import { fromBase64URL } from '@/lib/encoding';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -63,9 +64,9 @@ export async function POST(request: Request) {
     // 3. Verify WebAuthn authentication
     let verification;
     try {
-      // PRO-GRADE DECODER: Explicitly handles Base64 keys
-      const publicKeyBytes = new Uint8Array(Buffer.from(passkey.public_key, 'base64'));
-      console.log(`[Login] Authenticating ${cleanUsername} | Key Length: ${publicKeyBytes.length}`);
+      // THE VACCINE: Explicitly decodes from Base64URL to raw bytes
+      const publicKeyBytes = fromBase64URL(passkey.public_key);
+      console.log(`[Login] Decoding vault for ${cleanUsername} | PK Length: ${publicKeyBytes.length} bytes`);
 
       if (!publicKeyBytes || publicKeyBytes.length === 0) {
         return NextResponse.json({
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
         expectedRPID: rpID,
         credential: {
           id: passkey.id,
-          publicKey: publicKeyBytes,
+          publicKey: publicKeyBytes as any, // Bypass strict type check for Node/DOM binary conflict
           counter: Number(passkey.counter),
         },
         requireUserVerification: false,
