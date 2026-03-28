@@ -35,8 +35,7 @@ export default function RegistrationForm() {
 
       // 2. Trigger native OS biometric prompt
       const attestationResponse = await startRegistration({
-        ...options,
-        // Ensure credential ID and user ID are correctly formatted if they come as strings
+        optionsJSON: options,
       });
 
       setStatus('verifying');
