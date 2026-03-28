@@ -17,7 +17,10 @@ export const publicClient = createPublicClient({
 export const bundlerClient = createPimlicoClient({
   chain,
   transport,
-  entryPoint: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789", // EntryPoint v0.6
+  entryPoint: {
+    address: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789" as `0x${string}`,
+    version: "0.6" as const,
+  },
 });
 
 /**

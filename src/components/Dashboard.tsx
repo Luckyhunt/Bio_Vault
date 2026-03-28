@@ -43,7 +43,7 @@ export default function Dashboard({ user }: { user: any }) {
       const options = await optionsResp.json();
 
       // Trigger biometric prompt for transaction authorization
-      await startAuthentication(options);
+      await startAuthentication({ optionsJSON: options });
       
       alert('Biometric Signature Verified! Transaction Sent via Pimlico Bundler.');
     } catch (err) {
