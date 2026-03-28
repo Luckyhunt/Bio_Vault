@@ -3,7 +3,6 @@ import { verifyRegistrationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
-import { keccak256, toHex } from 'viem';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -52,9 +51,13 @@ export async function POST(request: Request) {
       const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
       const email = `${cleanUsername}@biovault.local`;
 
-      // Generate a deterministic wallet address from the public key (EVM-compatible)
-      const publicKeyHex = Buffer.from(credentialPublicKey).toString('hex');
-      const walletAddress = `0x${publicKeyHex.slice(-40)}` as `0x${string}`;
+      // Store public key as base64 — reliable cross-platform encoding.
+      // DO NOT use hex: Buffer.from(Uint8Array).toString('hex') may produce empty string on Vercel.
+      const publicKeyB64 = Buffer.from(credentialPublicKey).toString('base64');
+      // Derive wallet address from last 20 bytes of the public key
+      const walletAddress = `0x${Buffer.from(credentialPublicKey).slice(-20).toString('hex')}` as `0x${string}`;
+
+      console.log('[Register] Public key bytes:', credentialPublicKey.length, '| B64 length:', publicKeyB64.length);
 
       // Check if this username is truly taken (vs orphaned auth user with no passkey)
       const { data: existingProfile } = await supabaseAdmin
@@ -103,7 +106,7 @@ export async function POST(request: Request) {
         .insert({
           id: credentialID,
           user_id: userId,
-          public_key: publicKeyHex,
+          public_key: publicKeyB64,
           counter,
           device_type: verification.registrationInfo.credentialDeviceType || 'single_device',
           transports: attestationResponse.response.transports || [],

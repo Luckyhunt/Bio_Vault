@@ -63,6 +63,17 @@ export async function POST(request: Request) {
     // 3. Verify WebAuthn authentication
     let verification;
     try {
+      // Decode stored public key from base64 (stored this way during registration)
+      const publicKeyBytes = Buffer.from(passkey.public_key, 'base64');
+      console.log('[Login] Public key bytes length:', publicKeyBytes.length, '| stored value length:', passkey.public_key?.length);
+
+      if (!publicKeyBytes || publicKeyBytes.length === 0) {
+        return NextResponse.json({
+          error: 'Vault key data is corrupted. Please re-register your vault.',
+          debug_hint: `public_key empty or null for passkey: ${passkey.id}`
+        }, { status: 400 });
+      }
+
       verification = await verifyAuthenticationResponse({
         response: authenticationResponse,
         expectedChallenge,
@@ -70,13 +81,9 @@ export async function POST(request: Request) {
         expectedRPID: rpID,
         credential: {
           id: passkey.id,
-          publicKey: Buffer.from(passkey.public_key, 'hex'),
+          publicKey: publicKeyBytes,
           counter: Number(passkey.counter),
         },
-        // NOTE: requireUserVerification=false here is intentional and correct.
-        // UV is enforced during REGISTRATION (key creation). 
-        // During authentication, we trust the hardware bound the key correctly.
-        // Setting true here causes failures on many devices/browsers during auth.
         requireUserVerification: false,
       });
     } catch (vErr: any) {
@@ -87,9 +94,9 @@ export async function POST(request: Request) {
         credentialId: passkey.id,
         counter: passkey.counter,
       });
-      return NextResponse.json({ 
-        error: 'Biometric verification failed', 
-        debug_hint: vErr.message 
+      return NextResponse.json({
+        error: 'Biometric verification failed',
+        debug_hint: vErr.message
       }, { status: 400 });
     }
 
