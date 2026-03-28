@@ -61,12 +61,21 @@ export async function POST(request: Request) {
       }, { status: 401 });
     }
 
-    // 3. Verify WebAuthn authentication
+    // 3. Verify WebAuthn authentication (MANIFESTO GRADE)
     let verification;
     try {
-      // THE VACCINE: Explicitly decodes from Base64URL to raw bytes
+      // THE MANIFESTO DECODE: Reconstructs exact bytes from DB storage
       const publicKeyBytes = fromBase64URL(passkey.public_key);
-      console.log(`[Login] Decoding vault for ${cleanUsername} | PK Length: ${publicKeyBytes.length} bytes`);
+
+      // MANIFESTO DIAGNOSTICS: Check incoming client data lengths
+      console.log('--- LOGIN HANDSHAKE DIAGNOSIS ---');
+      console.log('User:', cleanUsername);
+      console.log('DB Public Key length:', publicKeyBytes.length);
+      console.log('Client Response ID:', authenticationResponse.id);
+      console.log('Client Data JSON length:', authenticationResponse.response.clientDataJSON?.length);
+      console.log('Authenticator Data length:', authenticationResponse.response.authenticatorData?.length);
+      console.log('Signature length:', authenticationResponse.response.signature?.length);
+      console.log('--- END DIAGNOSIS ---');
 
       if (!publicKeyBytes || publicKeyBytes.length === 0) {
         return NextResponse.json({
@@ -82,7 +91,7 @@ export async function POST(request: Request) {
         expectedRPID: rpID,
         credential: {
           id: passkey.id,
-          publicKey: publicKeyBytes as any, // Bypass strict type check for Node/DOM binary conflict
+          publicKey: publicKeyBytes as any, // Bypass strict type check
           counter: Number(passkey.counter),
         },
         requireUserVerification: false,

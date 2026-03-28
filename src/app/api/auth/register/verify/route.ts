@@ -52,12 +52,17 @@ export async function POST(request: Request) {
       const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
       const email = `${cleanUsername}@biovault.local`;
 
-      // 4. Encode & Store Public Key (Base64URL Vaccine)
-      // This is the most robust way to avoid data corruption in Vercel/Node edge environments.
+      // 4. Encode & Store Public Key (WEB-AUTHN MANIFESTO VACCINE)
       const publicKeyB64URL = toBase64URL(credentialPublicKey);
       const walletAddress = `0x${Buffer.from(credentialPublicKey).slice(-20).toString('hex')}` as `0x${string}`;
 
-      console.log(`[Register] Creating vault for ${cleanUsername} | PK B64URL: ${publicKeyB64URL.substring(0, 20)}...`);
+      // MANIFESTO DIAGNOSTICS
+      console.log('--- REGISTER DIAGNOSIS ---');
+      console.log('User:', cleanUsername);
+      console.log('Raw PK length:', credentialPublicKey.length);
+      console.log('B64URL PK length:', publicKeyB64URL.length);
+      console.log('Wallet address:', walletAddress);
+      console.log('--- END DIAGNOSIS ---');
 
       // Check if this username is truly taken (vs orphaned auth user with no passkey)
       const { data: existingProfile } = await supabaseAdmin
