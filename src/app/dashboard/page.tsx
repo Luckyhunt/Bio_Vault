@@ -18,6 +18,12 @@ export default function DashboardPage() {
         router.push('/');
         return;
       }
+
+      // Cleanup ugly Magic Link hash parameters from the URL
+      if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+
       setUser(user);
       setLoading(false);
     };

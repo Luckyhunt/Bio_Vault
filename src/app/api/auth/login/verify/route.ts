@@ -128,6 +128,9 @@ export async function POST(request: Request) {
       const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: 'magiclink',
         email,
+        options: {
+          redirectTo: `${origin}/dashboard`
+        }
       });
 
       if (linkError) throw new Error(`Auth Session Error: ${linkError.message}`);
