@@ -23,7 +23,7 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
 
   const fetchPasskeys = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('passkeys')
       .select('*')
       .eq('user_id', user.id);
@@ -53,6 +53,7 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             className="w-full max-w-lg bg-zinc-900 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl overflow-hidden relative"
           >
+            {/* Background Glow */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[60px] rounded-full" />
             
             <div className="flex justify-between items-center mb-8 relative z-10">
@@ -60,7 +61,11 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
                 <ShieldCheck className="w-6 h-6 text-indigo-400" />
                 Manage Passkeys
               </h2>
-              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+              <button 
+                onClick={onClose} 
+                className="p-2 hover:bg-white/5 rounded-xl transition-colors"
+                title="Close"
+              >
                 <X className="w-5 h-5 text-white/40" />
               </button>
             </div>
@@ -69,17 +74,21 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
               {loading ? (
                 <div className="py-12 flex flex-col items-center justify-center text-white/20">
                   <Fingerprint className="w-12 h-12 animate-pulse mb-4" />
-                  <p className="text-sm font-bold animate-pulse">Scanning Vault...</p>
+                  <p className="text-sm font-bold animate-pulse uppercase tracking-widest">Scanning Vault...</p>
                 </div>
               ) : passkeys.length > 0 ? (
                 passkeys.map((pk) => (
                   <div key={pk.id} className="p-5 rounded-3xl bg-white/5 border border-white/5 flex items-center justify-between group">
                     <div className="flex items-center gap-4">
                       <div className="p-3 rounded-2xl bg-indigo-500/10">
-                        {pk.device_type === 'single_device' ? <Smartphone className="w-5 h-5 text-indigo-400" /> : <Monitor className="w-5 h-5 text-blue-400" />}
+                        {pk.credential_device_type === 'singleDevice' ? (
+                          <Smartphone className="w-5 h-5 text-indigo-400" />
+                        ) : (
+                          <Monitor className="w-5 h-5 text-blue-400" />
+                        )}
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white/80">Device Identifier</span>
+                        <span className="text-sm font-bold text-white/80 uppercase tracking-tighter">Device Identifier</span>
                         <code className="text-[10px] text-white/40 font-mono tracking-tight">
                           {pk.id.startsWith('\\x') ? pk.id.slice(2, 18) : pk.id.slice(0, 16)}...
                         </code>
@@ -87,7 +96,8 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
                     </div>
                     <button 
                       onClick={() => deletePasskey(pk.id)}
-                      className="p-3 rounded-2xl bg-red-400/5 hover:bg-red-400/20 text-red-400/40 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+                      className="p-3 rounded-2xl bg-red-400/5 hover:bg-red-400/20 text-red-400/40 hover:text-red-400 transition-all sm:opacity-0 group-hover:opacity-100"
+                      title="Delete Passkey"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -97,6 +107,7 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
                 <p className="text-center text-white/40 italic py-8">No passkeys found in the vault.</p>
               )}
 
+              {/* Warning Box */}
               <div className="mt-8 p-5 rounded-3xl bg-orange-500/5 border border-orange-500/10 flex gap-4">
                 <AlertTriangle className="w-6 h-6 text-orange-400 shrink-0" />
                 <p className="text-[11px] text-orange-400/80 font-medium leading-[1.6]">

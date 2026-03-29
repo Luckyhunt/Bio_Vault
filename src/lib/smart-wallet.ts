@@ -1,15 +1,17 @@
-import { createPublicClient, http, Hash, Hex } from 'viem';
-import { mainnet, polygonAmoy } from 'viem/chains';
-import { createSmartAccountClient } from 'permissionless';
+import { createPublicClient, http, Hex } from 'viem';
+import { polygonAmoy } from 'viem/chains';
+import { 
+  toCoinbaseSmartAccount 
+} from 'viem/account-abstraction';
+import { toWebAuthnAccount } from 'viem/account-abstraction';
 import { createPimlicoClient } from 'permissionless/clients/pimlico';
-import { toCoinbaseSmartAccount, toWebAuthnAccount } from 'viem/account-abstraction';
-
-// For this MVP, we use Polygon Amoy (Testnet)
-export const chain = polygonAmoy;
+import { createSmartAccountClient } from 'permissionless';
 
 // 1. Separate Transports for Node Reads vs Bundler Writes
+export const chain = polygonAmoy;
 export const nodeTransport = http('https://rpc-amoy.polygon.technology');
-export const bundlerTransport = http(process.env.NEXT_PUBLIC_BUNDLER_RPC_URL);
+const bundlerRpcUrl = process.env.NEXT_PUBLIC_BUNDLER_RPC_URL || '';
+export const bundlerTransport = http(bundlerRpcUrl);
 
 // 2. Public Client for eth_call, balance, and contract reads
 export const publicClient = createPublicClient({
@@ -28,10 +30,11 @@ export const bundlerClient = createPimlicoClient({
 });
 
 /**
- * Derives and instantiates a fully Paymaster-enabled Coinbase Smart Account powered by a WebAuthn (Passkey) Signer.
+ * Derives and instantiates a fully Paymaster-enabled Coinbase Smart Account 
+ * powered by a WebAuthn (Passkey) Signer.
  * 
  * @param passkeyId The exact Base64URL string ID of the passkey
- * @param publicKeyHex The hex-encoded public key bytes
+ * @param publicKeyHex The raw 64-byte hex-encoded public key coordinates
  */
 export async function createPasskeySmartAccountClient(passkeyId: string, publicKeyHex: Hex) {
   // Normalize IDs from Supabase/Postgres BYTEA prefixes (\x -> 0x)
@@ -47,10 +50,11 @@ export async function createPasskeySmartAccountClient(passkeyId: string, publicK
   });
 
   // 2. Wrap the Signer into an ERC-4337 Coinbase Smart Account Configuration
+  // This derives the Smart Account address using the public key owners.
   const smartAccount = await toCoinbaseSmartAccount({
     client: publicClient,
     owners: [webAuthnAccount],
-    version: '1' as any,
+    version: '1', // Corrected version for Coinbase Smart Account
   });
 
   // 3. Create the Smart Account Client with Pimlico Paymaster sponsorship
@@ -64,7 +68,8 @@ export async function createPasskeySmartAccountClient(passkeyId: string, publicK
         return (await bundlerClient.getUserOperationGasPrice()).fast;
       },
     },
-  });
+  }) as any;
 
   return smartAccountClient;
 }
+

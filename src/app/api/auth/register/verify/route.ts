@@ -4,6 +4,8 @@ import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { toBase64URL, toUint8Array } from '@/lib/encoding';
+import { extractRawPublicKey } from '@/lib/webauthn-utils';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -104,13 +106,15 @@ export async function POST(request: Request) {
         userId = authUser.user.id;
       }
 
-      // 5. Store Passkey (BEYOND STABLE: CHARACTER-PERFECT DIRECT STRING)
+      // 5. Store Passkey (STABILIZED: Raw X,Y coordinates for EVM factory compatibility)
+      const rawPublicKey = extractRawPublicKey(new Uint8Array(credentialPublicKey));
+      
       const { error: dbError } = await supabaseAdmin
         .from('passkeys')
         .insert({
-          id: attestationResponse.id, // Direct string from browser
+          id: attestationResponse.id, 
           user_id: userId,
-          public_key: toBase64URL(toUint8Array(credentialPublicKey)), // Standard string
+          public_key: rawPublicKey, // Store raw 0x... hex
           counter,
           credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
           credential_backed_up: verification.registrationInfo.credentialBackedUp || false,
