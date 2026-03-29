@@ -62,17 +62,12 @@ export async function POST(request: Request) {
 
     for (const pk of passkeys) {
       try {
-        const binaryId = toUint8Array(pk.id);
-
-        if (!binaryId || binaryId.length < 16) {
-          throw new Error("Invalid length");
-        }
-
-        const base64Id = toBase64URL(binaryId);
-        console.log("[Login Options] Final ID for browser:", base64Id);
+        if (!pk.id) throw new Error("Missing ID");
+        
+        console.log("[Login Options] Final ID for browser:", pk.id);
 
         validCredentials.push({
-          id: base64Id, // 🔥 FIXED
+          id: pk.id, // ✅ CHARACTER-PERFECT DIRECT PASS-THROUGH
           type: 'public-key' as const,
           transports: sanitizeTransports(pk.transports),
         });

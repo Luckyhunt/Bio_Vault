@@ -104,13 +104,13 @@ export async function POST(request: Request) {
         userId = authUser.user.id;
       }
 
-      // 5. Store Passkey (STRING STABILITY RECTIFICATION)
+      // 5. Store Passkey (BEYOND STABLE: CHARACTER-PERFECT DIRECT STRING)
       const { error: dbError } = await supabaseAdmin
         .from('passkeys')
         .insert({
-          id: toBase64URL(toUint8Array(credentialID)), // Clean string storage
+          id: attestationResponse.id, // Direct string from browser
           user_id: userId,
-          public_key: toBase64URL(toUint8Array(credentialPublicKey)), // Clean string storage
+          public_key: toBase64URL(toUint8Array(credentialPublicKey)), // Standard string
           counter,
           credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
           credential_backed_up: verification.registrationInfo.credentialBackedUp || false,
