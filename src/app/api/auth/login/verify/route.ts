@@ -63,7 +63,8 @@ export async function POST(request: Request) {
     let verification;
 
     try {
-      const publicKeyBytes = hexToBytes(passkey.public_key);
+      // passkey.public_key is now the COSE Hex from the DB
+      const publicKeyBytes = new Uint8Array(hexToBytes(passkey.public_key as `0x${string}`));
 
       verification = await verifyAuthenticationResponse({
         response: authenticationResponse,
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
         expectedRPID: rpID,
         credential: {
           id: passkey.id,
-          publicKey: publicKeyBytes as unknown as Uint8Array<ArrayBuffer>,
+          publicKey: publicKeyBytes,
           counter: Number(passkey.counter),
         },
         requireUserVerification: true,

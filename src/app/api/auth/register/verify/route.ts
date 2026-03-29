@@ -140,7 +140,7 @@ export async function POST(request: Request) {
           .insert({
             id: attestationResponse.id, 
             user_id: userId,
-            public_key: publicKeyHex, // Store raw PKCS Hex
+            public_key: Buffer.from(credentialPublicKey).toString('hex'), // Store original COSE Hex
             counter,
             credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
             transports: attestationResponse.response.transports || [],

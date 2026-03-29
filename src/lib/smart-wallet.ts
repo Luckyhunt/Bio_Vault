@@ -8,6 +8,7 @@ import {
 import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import { createSmartAccountClient } from 'permissionless';
 import { toUint8Array } from '@/lib/encoding';
+import { getPKCSFromCOSE } from '@/lib/webauthn-utils';
 
 // ==============================
 // 1. CONFIG
@@ -39,9 +40,18 @@ export async function getSmartAccount(
   credentialId: string,
   publicKey: string
 ) {
-  // Normalize inputs robustly (Handles PKCS Hex Standard)
+  // Normalize inputs robustly (Handles COSE -> PKCS Conversion)
   const idHex = isHex(credentialId) ? credentialId : toHex(toUint8Array(credentialId));
-  const pubKeyHex = isHex(publicKey) ? publicKey : toHex(toUint8Array(publicKey));
+  
+  // If the publicKey is a COSE blob (from our new DB standard), convert it to PKCS
+  // COSE keys are typically much longer than 65-byte PKCS keys.
+  let pubKeyHex: Hex;
+  if (isHex(publicKey) && publicKey.length > 132) {
+    // Looks like a COSE Hex string (PKCS is usually 130-132 chars with 0x)
+    pubKeyHex = getPKCSFromCOSE(publicKey);
+  } else {
+    pubKeyHex = isHex(publicKey) ? publicKey : toHex(toUint8Array(publicKey));
+  }
 
   console.log('[SmartWallet] Identity Sync:', {
     id: idHex,
