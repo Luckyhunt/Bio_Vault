@@ -7,17 +7,20 @@ import { toCoinbaseSmartAccount, toWebAuthnAccount } from 'viem/account-abstract
 // For this MVP, we use Polygon Amoy (Testnet)
 export const chain = polygonAmoy;
 
-// Using Pimlico as our Bundler and Paymaster (Free tier)
-export const transport = http(process.env.NEXT_PUBLIC_BUNDLER_RPC_URL);
+// 1. Separate Transports for Node Reads vs Bundler Writes
+export const nodeTransport = http('https://rpc-amoy.polygon.technology');
+export const bundlerTransport = http(process.env.NEXT_PUBLIC_BUNDLER_RPC_URL);
 
+// 2. Public Client for eth_call, balance, and contract reads
 export const publicClient = createPublicClient({
   chain,
-  transport,
+  transport: nodeTransport,
 });
 
+// 3. Bundler Client for UserOperations and Paymaster
 export const bundlerClient = createPimlicoClient({
   chain,
-  transport,
+  transport: bundlerTransport,
   entryPoint: {
     address: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789', // EntryPoint v0.6
     version: '0.6',
@@ -50,7 +53,7 @@ export async function createPasskeySmartAccountClient(passkeyId: string, publicK
   const smartAccountClient = createSmartAccountClient({
     account: smartAccount,
     chain,
-    bundlerTransport: transport,
+    bundlerTransport,
     paymaster: bundlerClient, // Free Tier Pimlico Paymaster
     userOperation: {
       estimateFeesPerGas: async () => {
