@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     } catch (err: any) {
       console.error("OPTIONS GENERATION FAILED:", err);
       return NextResponse.json({
-        error: 'Failed to generate auth options',
+        error: `Failed to generate auth options: ${err.message}`, // Surface exact crash reason
         debug_hint: err.message,
       }, { status: 500 });
     }
