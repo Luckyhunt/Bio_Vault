@@ -4,6 +4,7 @@ import { rpID } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
+import { toUint8Array, toBase64URL } from '@/lib/encoding';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -49,36 +50,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No biometric key found for this vault.' }, { status: 404 });
     }
 
-    // 3. Generate authentication options
-    const options = await generateAuthenticationOptions({
-      rpID,
-      allowCredentials: passkeys.map((pk: any) => ({
-        // Support both Buffer and string-encoded binary from Supabase
-        id: pk.id instanceof Uint8Array ? pk.id : new Uint8Array(Buffer.from(pk.id, 'hex')),
-        type: 'public-key' as const,
-        transports: pk.transports || [],
-      })),
-      userVerification: 'required',
-    });
+    // DIAGNOSTIC LOGGING: Confirm binary types before hand-off
+    console.log(`[Login Options] Passkeys found: ${passkeys.length}`);
+    console.log(`[Login Options] Type of first ID: ${typeof passkeys[0].id}`);
 
-    // 4. Store challenge in the database for session-less verification
-    const { error: challengeError } = await supabaseAdmin
-      .from('challenges')
-      .insert({
-        challenge: options.challenge,
-        type: 'authentication',
-        user_id_hint: cleanUsername,
-        expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(), // 5 minutes
+    // 3. Generate authentication options
+    try {
+      const options = await generateAuthenticationOptions({
+        rpID,
+        allowCredentials: passkeys.map((pk: any) => ({
+          // LIBRARY REQUIREMENT: id MUST be a Base64URL string in the options JSON
+          id: toBase64URL(toUint8Array(pk.id)),
+          type: 'public-key' as const,
+          transports: pk.transports || [],
+        })),
+        userVerification: 'required',
       });
 
-    if (challengeError) {
-      console.error('Challenge DB sync failure:', challengeError);
-      throw new Error(`Vault Handshake Error: ${challengeError.message}`);
+      // 4. Store challenge in the database for session-less verification
+      const { error: challengeError } = await supabaseAdmin
+        .from('challenges')
+        .insert({
+          challenge: options.challenge,
+          type: 'authentication',
+          user_id_hint: cleanUsername,
+          expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(), // 5 minutes
+        });
+
+      if (challengeError) {
+        console.error('Challenge DB sync failure:', challengeError);
+        throw new Error(`Vault Handshake Error: ${challengeError.message}`);
+      }
+
+      console.log(`[Login] Challenge persisted for ${cleanUsername}`);
+      return NextResponse.json(options);
+    } catch (binaryErr: any) {
+      console.error('[Login Options] Binary Adapter Failure:', binaryErr.message);
+      return NextResponse.json({ 
+        error: 'Vault hardware mismatch', 
+        debug_hint: binaryErr.message 
+      }, { status: 400 });
     }
-
-    console.log(`[Login] Challenge persisted for ${cleanUsername}`);
-
-    return NextResponse.json(options);
   } catch (error: any) {
     console.error('CRITICAL: Login options failure:', error);
     return NextResponse.json({ 

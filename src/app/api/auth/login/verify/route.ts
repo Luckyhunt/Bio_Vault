@@ -3,7 +3,7 @@ import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
-import { fromBase64URL } from '@/lib/encoding';
+import { fromBase64URL, toUint8Array, toBase64URL } from '@/lib/encoding';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     // 2. Find the passkey by binary ID (BYTEA Support)
-    const credentialIdBuffer = Buffer.from(authenticationResponse.id, 'base64url');
+    const credentialIdBuffer = toUint8Array(authenticationResponse.id);
     const { data: passkey, error: pkError } = await supabaseAdmin
       .from('passkeys')
       .select('id, public_key, counter, user_id')
@@ -71,18 +71,18 @@ export async function POST(request: Request) {
       }, { status: 401 });
     }
 
-    // 3. Verify WebAuthn authentication (MANIFESTO GRADE)
+    // 4. Verify WebAuthn authentication (MANIFESTO GRADE)
     let verification;
     try {
-      // THE NATIVE RECONSTRUCTION: Ensure we treat the DB key as raw binary (BYTEA)
-      const publicKeyBytes = passkey.public_key instanceof Uint8Array 
-        ? passkey.public_key 
-        : new Uint8Array(Buffer.from(passkey.public_key as any, 'hex'));
+      // THE NATIVE RECONSTRUCTION: BYTEA from Supabase (Base64 or Buffer)
+      const publicKeyBytes = toUint8Array(passkey.public_key);
+      const binaryId = toUint8Array(passkey.id);
 
-      // MANIFESTO DIAGNOSTICS
+      // MANIFESTO DIAGNOSTICS: Check incoming binary integrity
       console.log('--- LOGIN HANDSHAKE DIAGNOSIS ---');
       console.log('User:', cleanUsername);
-      console.log('ID Buffer Length:', credentialIdBuffer.length);
+      console.log('ID Type Handled:', typeof passkey.id);
+      console.log('ID Buffer Length:', binaryId.length);
       console.log('Public Key length:', publicKeyBytes.length);
       console.log('Stored Counter:', passkey.counter);
       console.log('--- END DIAGNOSIS ---');
@@ -93,23 +93,17 @@ export async function POST(request: Request) {
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: {
-          id: passkey.id,
+          id: toBase64URL(binaryId),
           publicKey: publicKeyBytes as any,
           counter: Number(passkey.counter),
         },
         requireUserVerification: false,
       });
     } catch (vErr: any) {
-      console.error('[Login] WebAuthn verify failed:', {
-        message: vErr.message,
-        rpID,
-        origin,
-        credentialId: passkey.id,
-        counter: passkey.counter,
-      });
-      return NextResponse.json({
-        error: 'Biometric verification failed',
-        debug_hint: vErr.message
+      console.error('[Login] WebAuthn verify failed:', vErr.message);
+      return NextResponse.json({ 
+        error: 'Biometric verification failed', 
+        debug_hint: process.env.NODE_ENV === 'development' ? vErr.message : undefined 
       }, { status: 400 });
     }
 
