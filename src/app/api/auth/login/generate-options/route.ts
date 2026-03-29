@@ -24,6 +24,14 @@ function toUint8ArraySafe(data: any): Uint8Array {
   throw new Error("Unsupported binary format");
 }
 
+function toBase64URL(buffer: Uint8Array) {
+  return Buffer.from(buffer)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
 // 🔒 STRICT TRANSPORT SANITIZER (Prevents SimpleWebAuthn v13 Crashes)
 const VALID_TRANSPORTS = ['usb', 'nfc', 'ble', 'internal', 'hybrid'] as const;
 
@@ -87,7 +95,7 @@ export async function POST(request: Request) {
         }
 
         validCredentials.push({
-          id: idBuffer,
+          id: toBase64URL(idBuffer), // 🔥 FIXED
           type: 'public-key' as const,
           transports: sanitizeTransports(pk.transports),
         });
