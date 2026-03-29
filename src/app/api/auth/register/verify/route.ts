@@ -4,18 +4,18 @@ import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { toBase64URL, toUint8Array } from '@/lib/encoding';
-import { extractRawPublicKey } from '@/lib/webauthn-utils';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getSmartAccount } from '@/lib/smart-wallet';
+import { supabaseAdmin as adminClient } from '@/lib/supabase-admin';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return NextResponse.json({ error: 'Vault initialization failed', debug_hint: 'Missing ENV' }, { status: 500 });
+    return NextResponse.json({ error: 'Vault initialization failed' }, { status: 500 });
   }
 
-  const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY);
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   try {
     const body = await request.json();
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     }
 
     // 1. Fetch and consume one-time challenge from DB
-    const { data: challengeData, error: challengeFetchError } = await supabaseAdmin
+    const { data: challengeData, error: challengeFetchError } = await db
       .from('challenges')
       .select('*')
       .eq('challenge', challenge)
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 
     // Security: Challenge must not be expired
     if (new Date(challengeData.expires_at) < new Date()) {
-      await supabaseAdmin.from('challenges').delete().eq('id', challengeData.id);
+      await db.from('challenges').delete().eq('id', challengeData.id);
       return NextResponse.json({ error: 'Handshake expired. Please refresh.' }, { status: 400 });
     }
 
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     }
 
     // 3. ONE-TIME USE: Consume challenge immediately
-    await supabaseAdmin.from('challenges').delete().eq('id', challengeData.id);
+    await db.from('challenges').delete().eq('id', challengeData.id);
 
     if (verification.verified && verification.registrationInfo) {
       const { credential } = verification.registrationInfo;
@@ -72,30 +72,33 @@ export async function POST(request: Request) {
       const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
       const email = `${cleanUsername}@biovault.local`;
 
-      // 4. Encode & Store Public Key (WEB-AUTHN MANIFESTO VACCINE)
-      const walletAddress = `0x${Buffer.from(credentialPublicKey).slice(-20).toString('hex')}` as `0x${string}`;
+      // 4. ARCHITECTURAL FIX: Deterministic Smart Account Address
+      // We no longer "slice" the PK. We derive the real counterfactual address.
+      const smartAccount = await getSmartAccount(
+        attestationResponse.id, 
+        toBase64URL(toUint8Array(credentialPublicKey))
+      );
+      const walletAddress = smartAccount.address;
 
-      // MANIFESTO DIAGNOSTICS: Logging sizes for Vercel console
+      // MANIFESTO DIAGNOSTICS
       console.log('--- REGISTER DIAGNOSIS ---');
       console.log('User:', cleanUsername);
-      console.log('Credential ID length:', credentialID.length);
-      console.log('Raw PK length:', credentialPublicKey.length);
-      console.log('Wallet address:', walletAddress);
+      console.log('Verified Wallet Address:', walletAddress);
       console.log('--- END DIAGNOSIS ---');
 
       // Check for orphan or fresh user
-      const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers();
-      const orphanUser = existingAuthUsers?.users?.find(u => u.email === email);
+      const { data: existingAuthUsers } = await db.auth.admin.listUsers();
+      const orphanUser = existingAuthUsers?.users?.find((u: any) => u.email === email);
 
       let userId: string;
 
       if (orphanUser) {
-        await supabaseAdmin.auth.admin.updateUserById(orphanUser.id, {
+        await db.auth.admin.updateUserById(orphanUser.id, {
           user_metadata: { username: cleanUsername, wallet_address: walletAddress },
         });
         userId = orphanUser.id;
       } else {
-        const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        const { data: authUser, error: authError } = await db.auth.admin.createUser({
           email,
           password: Math.random().toString(36).slice(-16),
           user_metadata: { username: cleanUsername, wallet_address: walletAddress },
@@ -107,7 +110,7 @@ export async function POST(request: Request) {
       }
 
       // 5. Store Passkey (RESTORED: Aligned with SQL Schema)
-      const { error: dbError } = await supabaseAdmin
+      const { error: dbError } = await db
         .from('passkeys')
         .insert({
           id: attestationResponse.id, 
@@ -124,7 +127,7 @@ export async function POST(request: Request) {
       }
 
       // 6. Ensure Profiles record exists
-      const { error: profileError } = await supabaseAdmin
+      const { error: profileError } = await db
         .from('profiles')
         .upsert({
           id: userId,
@@ -140,6 +143,10 @@ export async function POST(request: Request) {
 
       return NextResponse.json({ verified: true, walletAddress });
     }
+
+    // 7. FIX: Explicit return if verification.verified is false (Prevents 500 error)
+    return NextResponse.json({ error: 'Biometric verification returned false' }, { status: 403 });
+
   } catch (err: any) {
     console.error('CRITICAL: Registration verify failure:', err);
     return NextResponse.json({ 

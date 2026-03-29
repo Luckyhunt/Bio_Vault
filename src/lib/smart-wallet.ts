@@ -33,25 +33,17 @@ export const bundlerClient = createPimlicoClient({
 });
 
 /**
- * Derives and instantiates a fully Paymaster-enabled Coinbase Smart Account 
- * powered by a WebAuthn (Passkey) Signer.
- * 
- * @param passkeyId The exact Base64URL string ID of the passkey
- * @param publicKeyHex The raw 64-byte hex-encoded public key coordinates
+ * Deterministically derives the Coinbase Smart Account configuration.
+ * This can be used on both the Client and Server for address consistency.
  */
-export async function createPasskeySmartAccountClient(passkeyId: string, publicKey: string) {
-  // 1. Normalize IDs and Keys from Supabase (Handles both standard and BYTEA formats)
+export async function getSmartAccount(passkeyId: string, publicKey: string) {
   const cleanId = passkeyId.startsWith('\\x') ? `0x${passkeyId.slice(2)}` as Hex : passkeyId;
   const cleanPublicKey = publicKey.startsWith('\\x') ? `0x${publicKey.slice(2)}` : publicKey;
 
-  // 2. STABILIZATION: Convert stored COSE key to Raw Coordinates for the EVM
-  // If the key is Base64 (Standard), we decode and extract.
-  // This is the CRITICAL fix for the AA13 error.
   const rawPublicKey = cleanPublicKey.startsWith('0x') 
     ? cleanPublicKey as Hex 
     : extractRawPublicKey(toUint8Array(cleanPublicKey)) as Hex;
 
-  // 3. Create the WebAuthn Signer natively with viem
   const webAuthnAccount = toWebAuthnAccount({
     credential: {
       id: cleanId,
@@ -59,21 +51,24 @@ export async function createPasskeySmartAccountClient(passkeyId: string, publicK
     },
   });
 
-
-  // 2. Wrap the Signer into an ERC-4337 Coinbase Smart Account Configuration
-  // This derives the Smart Account address using the public key owners.
-  const smartAccount = await toCoinbaseSmartAccount({
+  return await toCoinbaseSmartAccount({
     client: publicClient,
     owners: [webAuthnAccount],
-    version: '1', // Corrected version for Coinbase Smart Account
+    version: '1',
   });
+}
 
-  // 3. Create the Smart Account Client with Pimlico Paymaster sponsorship
+/**
+ * Instantiates a fully functional Smart Account Client with Paymaster support.
+ */
+export async function createPasskeySmartAccountClient(passkeyId: string, publicKey: string) {
+  const smartAccount = await getSmartAccount(passkeyId, publicKey);
+
   const smartAccountClient = createSmartAccountClient({
     account: smartAccount,
     chain,
     bundlerTransport,
-    paymaster: bundlerClient, // Free Tier Pimlico Paymaster
+    paymaster: bundlerClient,
     userOperation: {
       estimateFeesPerGas: async () => {
         return (await bundlerClient.getUserOperationGasPrice()).fast;
@@ -83,4 +78,5 @@ export async function createPasskeySmartAccountClient(passkeyId: string, publicK
 
   return smartAccountClient;
 }
+
 
