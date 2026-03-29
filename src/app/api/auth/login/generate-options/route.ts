@@ -4,7 +4,7 @@ import { rpID } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
-import { toUint8Array, toBase64URL } from '@/lib/encoding';
+import { toUint8Array } from '@/lib/encoding';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -50,32 +50,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No biometric key found for this vault.' }, { status: 404 });
     }
 
-    // 3. Generate authentication options (FAULT-TOLERANT ADAPTER)
+    // 3. Generate authentication options (SAFE + FAULT TOLERANT)
     const validCredentials: any[] = [];
     let invalidCount = 0;
 
-    passkeys.forEach((pk: any) => {
+    for (const pk of passkeys) {
       try {
         const binaryId = toUint8Array(pk.id);
+
+        if (!binaryId || binaryId.length < 16) {
+          throw new Error("Invalid credential length");
+        }
+
         validCredentials.push({
-          // PASS RAW BYTES: The library handles JSON serialization natively
           id: binaryId,
           type: 'public-key' as const,
           transports: pk.transports || [],
         });
       } catch (err: any) {
-        console.warn(`[Login Options] Skipping corrupted credential ID: ${typeof pk.id === 'string' ? pk.id : 'BUFFER_BINARY'} | Error: ${err.message}`);
+        console.warn(`[Login Options] Skipping corrupted credential`, {
+          raw: pk.id,
+          error: err.message,
+        });
         invalidCount++;
       }
-    });
+    }
 
-    // DIAGNOSTIC SUMMARY
     console.log(`[Login Options] Summary for ${cleanUsername} -> Total: ${passkeys.length} | Valid: ${validCredentials.length} | Invalid: ${invalidCount}`);
 
     if (validCredentials.length === 0) {
       return NextResponse.json({ 
         error: 'No valid passkeys found for this user', 
-        debug_hint: `All ${passkeys.length} credentials failed binary conversion. Cleanup required.`
       }, { status: 400 });
     }
 
@@ -86,11 +91,14 @@ export async function POST(request: Request) {
         userVerification: 'required',
       });
 
-      // 4. Store challenge in the database for session-less verification
+      // 4. Store challenge in the database (SAFE VERSION)
+      console.log("[Login] Challenge to store:", options.challenge);
+      console.log("[Login] Challenge type:", typeof options.challenge);
+
       const { error: challengeError } = await supabaseAdmin
         .from('challenges')
         .insert({
-          challenge: options.challenge,
+          challenge: options.challenge, // Keep as string (Matches TEXT column)
           type: 'authentication',
           user_id_hint: cleanUsername,
           expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(), // 5 minutes
