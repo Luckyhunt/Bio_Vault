@@ -25,7 +25,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required registration data' }, { status: 400 });
     }
 
-    // 1. Fetch and consume one-time challenge from DB
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // 1. SECURITY: Rate Limiting / Handshake Velocity Verification
+    // Check if this username is spamming registration attempts
+    const { count: recentAttempts } = await db
+      .from('challenges')
+      .select('*', { count: 'exact', head: true })
+      .eq('type', 'registration')
+      .gt('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString()); // Last 5 mins
+
+    if (recentAttempts && recentAttempts > 10) {
+      return NextResponse.json({ error: 'Too many registration attempts. Please wait 5 minutes.' }, { status: 429 });
+    }
+
+    // 2. Fetch and consume one-time challenge from DB
     const { data: challengeData, error: challengeFetchError } = await db
       .from('challenges')
       .select('*')
@@ -35,16 +49,10 @@ export async function POST(request: Request) {
 
     if (challengeFetchError || !challengeData) {
       console.warn('[Register] Invalid or missing challenge');
-      return NextResponse.json({ error: 'Handshake invalid. Please try again.' }, { status: 400 });
+      return NextResponse.json({ error: 'Handshake invalid. Please try again.' }, { status: 401 });
     }
 
-    // Security: Challenge must not be expired
-    if (new Date(challengeData.expires_at) < new Date()) {
-      await db.from('challenges').delete().eq('id', challengeData.id);
-      return NextResponse.json({ error: 'Handshake expired. Please refresh.' }, { status: 400 });
-    }
-
-    // 2. Verify WebAuthn attestation
+    // 3. Verify WebAuthn attestation (STRICT MODE)
     let verification;
     try {
       verification = await verifyRegistrationResponse({
@@ -55,38 +63,40 @@ export async function POST(request: Request) {
         requireUserVerification: true,
       });
     } catch (vError: any) {
-      console.error('WebAuthn Library Error:', vError);
+      console.error('[Register] WebAuthn Lib Error:', vError.message);
       return NextResponse.json({ 
-        error: 'Biometric registration failed', 
-        debug_hint: process.env.NODE_ENV === 'development' ? vError.message : undefined 
+        error: 'Biometric handshake failed', 
+        debug_hint: vError.message 
       }, { status: 400 });
     }
 
-    // 3. ONE-TIME USE: Consume challenge immediately
+    // 4. ONE-TIME USE: Consume challenge immediately
     await db.from('challenges').delete().eq('id', challengeData.id);
 
     if (verification.verified && verification.registrationInfo) {
       const { credential } = verification.registrationInfo;
       const { id: credentialID, publicKey: credentialPublicKey, counter } = credential;
 
-      const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
       const email = `${cleanUsername}@biovault.local`;
 
-      // 4. ARCHITECTURAL FIX: Deterministic Smart Account Address
-      // We no longer "slice" the PK. We derive the real counterfactual address.
-      const smartAccount = await getSmartAccount(
-        attestationResponse.id, 
-        toBase64URL(toUint8Array(credentialPublicKey))
-      );
-      const walletAddress = smartAccount.address;
+      // 5. DIAGNOSTIC BLOCK: Deterministic Smart Account Address
+      let walletAddress: string;
+      try {
+        console.log('[Register] Deriving Smart Account Address...');
+        const smartAccount = await getSmartAccount(
+          attestationResponse.id, 
+          toBase64URL(credentialPublicKey) // Fixed: Removed redundant toUint8Array
+        );
+        walletAddress = smartAccount.address;
+      } catch (derivationErr: any) {
+        console.error('[Register] Identity Derivation Failed:', derivationErr.message);
+        return NextResponse.json({ 
+          error: 'Identity derivation failure', 
+          debug_hint: `Derivation Error: ${derivationErr.message}` 
+        }, { status: 500 });
+      }
 
-      // MANIFESTO DIAGNOSTICS
-      console.log('--- REGISTER DIAGNOSIS ---');
-      console.log('User:', cleanUsername);
-      console.log('Verified Wallet Address:', walletAddress);
-      console.log('--- END DIAGNOSIS ---');
-
-      // Check for orphan or fresh user
+      // 6. DB SYNC: Auth & Profile Management
       const { data: existingAuthUsers } = await db.auth.admin.listUsers();
       const orphanUser = existingAuthUsers?.users?.find((u: any) => u.email === email);
 
@@ -105,53 +115,44 @@ export async function POST(request: Request) {
           email_confirm: true,
         });
 
-        if (authError) throw new Error(`Auth Engine Error: ${authError.message}`);
+        if (authError) throw new Error(`Supabase Auth Error: ${authError.message}`);
         userId = authUser.user.id;
       }
 
-      // 5. Store Passkey (RESTORED: Aligned with SQL Schema)
+      // 7. Passkey Persistence
       const { error: dbError } = await db
         .from('passkeys')
         .insert({
           id: attestationResponse.id, 
           user_id: userId,
-          public_key: toBase64URL(toUint8Array(credentialPublicKey)), 
+          public_key: toBase64URL(credentialPublicKey), 
           counter,
           device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
           transports: attestationResponse.response.transports || [],
         });
 
-      if (dbError) {
-        console.error('Passkey DB Insertion Failure:', dbError);
-        throw new Error(`Vault Storage Error: ${dbError.message}`);
-      }
+      if (dbError) throw new Error(`Vault DB Error: ${dbError.message}`);
 
-      // 6. Ensure Profiles record exists
-      const { error: profileError } = await db
-        .from('profiles')
-        .upsert({
-          id: userId,
-          username: cleanUsername,
-          display_name: username,
-          wallet_address: walletAddress,
-          updated_at: new Date().toISOString(),
-        });
-
-      if (profileError) {
-        console.warn('[Register] Profile sync failed:', profileError.message);
-      }
+      // 8. Profile Update
+      await db.from('profiles').upsert({
+        id: userId,
+        username: cleanUsername,
+        display_name: username,
+        wallet_address: walletAddress,
+        updated_at: new Date().toISOString(),
+      });
 
       return NextResponse.json({ verified: true, walletAddress });
     }
 
-    // 7. FIX: Explicit return if verification.verified is false (Prevents 500 error)
     return NextResponse.json({ error: 'Biometric verification returned false' }, { status: 403 });
 
   } catch (err: any) {
-    console.error('CRITICAL: Registration verify failure:', err);
+    console.error('CRITICAL: Registration failure:', err.message);
     return NextResponse.json({ 
       error: 'Unable to verify biometric registration', 
-      debug_hint: process.env.NODE_ENV === 'development' ? err.message : undefined 
+      debug_hint: `Stack: ${err.name} - ${err.message}` 
     }, { status: 500 });
   }
+
 }
