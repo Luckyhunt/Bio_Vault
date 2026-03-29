@@ -50,20 +50,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No biometric key found for this vault.' }, { status: 404 });
     }
 
-    // DIAGNOSTIC LOGGING: Confirm binary types before hand-off
-    console.log(`[Login Options] Passkeys found: ${passkeys.length}`);
-    console.log(`[Login Options] Type of first ID: ${typeof passkeys[0].id}`);
+    // 3. Generate authentication options (FAULT-TOLERANT ADAPTER)
+    const validCredentials: any[] = [];
+    let invalidCount = 0;
 
-    // 3. Generate authentication options
+    passkeys.forEach((pk: any) => {
+      try {
+        const binaryId = toUint8Array(pk.id);
+        validCredentials.push({
+          // PASS RAW BYTES: The library handles JSON serialization natively
+          id: binaryId,
+          type: 'public-key' as const,
+          transports: pk.transports || [],
+        });
+      } catch (err: any) {
+        console.warn(`[Login Options] Skipping corrupted credential ID: ${typeof pk.id === 'string' ? pk.id : 'BUFFER_BINARY'} | Error: ${err.message}`);
+        invalidCount++;
+      }
+    });
+
+    // DIAGNOSTIC SUMMARY
+    console.log(`[Login Options] Summary for ${cleanUsername} -> Total: ${passkeys.length} | Valid: ${validCredentials.length} | Invalid: ${invalidCount}`);
+
+    if (validCredentials.length === 0) {
+      return NextResponse.json({ 
+        error: 'No valid passkeys found for this user', 
+        debug_hint: `All ${passkeys.length} credentials failed binary conversion. Cleanup required.`
+      }, { status: 400 });
+    }
+
     try {
       const options = await generateAuthenticationOptions({
         rpID,
-        allowCredentials: passkeys.map((pk: any) => ({
-          // PASS RAW BYTES: The library handles JSON serialization natively
-          id: toUint8Array(pk.id),
-          type: 'public-key' as const,
-          transports: pk.transports || [],
-        })) as any,
+        allowCredentials: validCredentials,
         userVerification: 'required',
       });
 
@@ -84,12 +103,12 @@ export async function POST(request: Request) {
 
       console.log(`[Login] Challenge persisted for ${cleanUsername}`);
       return NextResponse.json(options);
-    } catch (binaryErr: any) {
-      console.error('[Login Options] Binary Adapter Failure:', binaryErr.message);
+    } catch (optErr: any) {
+      console.error('[Login Options] Generation Failure:', optErr.message);
       return NextResponse.json({ 
-        error: 'Vault hardware mismatch', 
-        debug_hint: binaryErr.message 
-      }, { status: 400 });
+        error: 'Unable to initiate biometric login', 
+        debug_hint: optErr.message
+      }, { status: 500 });
     }
   } catch (error: any) {
     console.error('CRITICAL: Login options failure:', error);
