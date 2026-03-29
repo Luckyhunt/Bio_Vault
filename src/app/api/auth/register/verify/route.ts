@@ -17,33 +17,51 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { username, attestationResponse } = body;
+    const { username, challenge, attestationResponse } = body;
 
-    if (!username || !attestationResponse) {
+    if (!username || !challenge || !attestationResponse) {
       return NextResponse.json({ error: 'Missing required registration data' }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    const expectedChallenge = cookieStore.get('registration_challenge')?.value;
+    // 1. Fetch and consume one-time challenge from DB
+    const { data: challengeData, error: challengeFetchError } = await supabaseAdmin
+      .from('challenges')
+      .select('*')
+      .eq('challenge', challenge)
+      .eq('type', 'registration')
+      .single();
 
-    if (!expectedChallenge) {
-      return NextResponse.json({ error: 'Session expired. Please refresh and try again.' }, { status: 400 });
+    if (challengeFetchError || !challengeData) {
+      console.warn('[Register] Invalid or missing challenge');
+      return NextResponse.json({ error: 'Handshake invalid. Please try again.' }, { status: 400 });
     }
 
-    // Verify WebAuthn attestation
+    // Security: Challenge must not be expired
+    if (new Date(challengeData.expires_at) < new Date()) {
+      await supabaseAdmin.from('challenges').delete().eq('id', challengeData.id);
+      return NextResponse.json({ error: 'Handshake expired. Please refresh.' }, { status: 400 });
+    }
+
+    // 2. Verify WebAuthn attestation
     let verification;
     try {
       verification = await verifyRegistrationResponse({
         response: attestationResponse,
-        expectedChallenge,
+        expectedChallenge: challengeData.challenge,
         expectedOrigin: origin,
         expectedRPID: rpID,
         requireUserVerification: true,
       });
     } catch (vError: any) {
       console.error('WebAuthn Library Error:', vError);
-      return NextResponse.json({ error: 'Biometric verification failed', debug_hint: vError.message }, { status: 400 });
+      return NextResponse.json({ 
+        error: 'Biometric registration failed', 
+        debug_hint: process.env.NODE_ENV === 'development' ? vError.message : undefined 
+      }, { status: 400 });
     }
+
+    // 3. ONE-TIME USE: Consume challenge immediately
+    await supabaseAdmin.from('challenges').delete().eq('id', challengeData.id);
 
     if (verification.verified && verification.registrationInfo) {
       const { credential } = verification.registrationInfo;
@@ -53,43 +71,28 @@ export async function POST(request: Request) {
       const email = `${cleanUsername}@biovault.local`;
 
       // 4. Encode & Store Public Key (WEB-AUTHN MANIFESTO VACCINE)
-      const publicKeyB64URL = toBase64URL(credentialPublicKey);
       const walletAddress = `0x${Buffer.from(credentialPublicKey).slice(-20).toString('hex')}` as `0x${string}`;
 
-      // MANIFESTO DIAGNOSTICS
+      // MANIFESTO DIAGNOSTICS: Logging sizes for Vercel console
       console.log('--- REGISTER DIAGNOSIS ---');
       console.log('User:', cleanUsername);
+      console.log('Credential ID length:', credentialID.length);
       console.log('Raw PK length:', credentialPublicKey.length);
-      console.log('B64URL PK length:', publicKeyB64URL.length);
       console.log('Wallet address:', walletAddress);
       console.log('--- END DIAGNOSIS ---');
 
-      // Check if this username is truly taken (vs orphaned auth user with no passkey)
-      const { data: existingProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .eq('username', cleanUsername)
-        .single();
-
-      if (existingProfile) {
-        return NextResponse.json({ error: 'This vault name is already taken. Choose another.' }, { status: 400 });
-      }
-
-      // Check for orphaned auth user (created but registration failed before passkey saved)
+      // Check for orphan or fresh user
       const { data: existingAuthUsers } = await supabaseAdmin.auth.admin.listUsers();
       const orphanUser = existingAuthUsers?.users?.find(u => u.email === email);
 
       let userId: string;
 
       if (orphanUser) {
-        // Orphan detected — reuse the existing auth user ID, update their metadata
-        console.log(`Recovering orphaned auth user: ${email}`);
         await supabaseAdmin.auth.admin.updateUserById(orphanUser.id, {
           user_metadata: { username: cleanUsername, wallet_address: walletAddress },
         });
         userId = orphanUser.id;
       } else {
-        // Fresh registration
         const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
           email,
           password: Math.random().toString(36).slice(-16),
@@ -97,23 +100,20 @@ export async function POST(request: Request) {
           email_confirm: true,
         });
 
-        if (authError) {
-          console.error('Supabase Auth failure:', authError);
-          throw new Error(`Auth Engine Error: ${authError.message}`);
-        }
-
+        if (authError) throw new Error(`Auth Engine Error: ${authError.message}`);
         userId = authUser.user.id;
       }
 
-      // Store Passkey
+      // 5. Store Passkey (Brick by Brick Binary Storage)
       const { error: dbError } = await supabaseAdmin
         .from('passkeys')
         .insert({
-          id: credentialID,
+          id: Buffer.from(credentialID), // BYTEA
           user_id: userId,
-          public_key: publicKeyB64URL,
+          public_key: Buffer.from(credentialPublicKey), // BYTEA
           counter,
-          device_type: verification.registrationInfo.credentialDeviceType || 'single_device',
+          credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
+          credential_backed_up: verification.registrationInfo.credentialBackedUp || false,
           transports: attestationResponse.response.transports || [],
         });
 
@@ -122,30 +122,28 @@ export async function POST(request: Request) {
         throw new Error(`Vault Storage Error: ${dbError.message}`);
       }
 
-      // --- DEEP ROOT FIX: Ensure Profiles record exists ---
-      // This is crucial for the login flow to correctly associate usernames and wallet addresses.
+      // 6. Ensure Profiles record exists
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
         .upsert({
           id: userId,
           username: cleanUsername,
-          display_name: username, // Original user input
+          display_name: username,
           wallet_address: walletAddress,
           updated_at: new Date().toISOString(),
         });
 
       if (profileError) {
-        console.warn('[Register] Profile sync failure (non-critical, but logging):', profileError.message);
+        console.warn('[Register] Profile sync failed:', profileError.message);
       }
 
-      cookieStore.delete('registration_challenge');
-
       return NextResponse.json({ verified: true, walletAddress });
-    } else {
-      return NextResponse.json({ verified: false, error: 'Biometric verification returned false' }, { status: 400 });
     }
-  } catch (error: any) {
-    console.error('CRITICAL: Registration Workflow Crash:', error);
-    return NextResponse.json({ error: 'Internal Vault System Error', debug_hint: error.message }, { status: 500 });
+  } catch (err: any) {
+    console.error('CRITICAL: Registration verify failure:', err);
+    return NextResponse.json({ 
+      error: 'Unable to verify biometric registration', 
+      debug_hint: process.env.NODE_ENV === 'development' ? err.message : undefined 
+    }, { status: 500 });
   }
 }

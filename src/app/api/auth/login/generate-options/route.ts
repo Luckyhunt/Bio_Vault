@@ -53,28 +53,37 @@ export async function POST(request: Request) {
     const options = await generateAuthenticationOptions({
       rpID,
       allowCredentials: passkeys.map((pk: any) => ({
-        id: pk.id,
+        // Support both Buffer and string-encoded binary from Supabase
+        id: pk.id instanceof Uint8Array ? pk.id : new Uint8Array(Buffer.from(pk.id, 'hex')),
         type: 'public-key' as const,
         transports: pk.transports || [],
       })),
       userVerification: 'required',
     });
 
-    // 4. Store challenge in a secure cookie
-    const cookieStore = await cookies();
-    cookieStore.set('authentication_challenge', options.challenge, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 60 * 5,
-    });
+    // 4. Store challenge in the database for session-less verification
+    const { error: challengeError } = await supabaseAdmin
+      .from('challenges')
+      .insert({
+        challenge: options.challenge,
+        type: 'authentication',
+        user_id_hint: cleanUsername,
+        expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(), // 5 minutes
+      });
+
+    if (challengeError) {
+      console.error('Challenge DB sync failure:', challengeError);
+      throw new Error(`Vault Handshake Error: ${challengeError.message}`);
+    }
+
+    console.log(`[Login] Challenge persisted for ${cleanUsername}`);
 
     return NextResponse.json(options);
   } catch (error: any) {
     console.error('CRITICAL: Login options failure:', error);
     return NextResponse.json({ 
       error: 'Unable to initiate biometric login', 
-      debug_hint: error.message 
+      debug_hint: process.env.NODE_ENV === 'development' ? error.message : undefined
     }, { status: 500 });
   }
 }

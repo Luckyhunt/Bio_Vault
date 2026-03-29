@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server';
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import { rpName, rpID } from '@/lib/webauthn';
-import { cookies } from 'next/headers';
-
+import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
 
 export async function POST(request: Request) {
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    return NextResponse.json({ error: 'Vault initialization failed', debug_hint: 'Missing ENV' }, { status: 500 });
+  }
+
+  const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY);
+
   try {
     const body = await request.json();
     const result = UsernameSchema.safeParse(body);
@@ -31,14 +39,22 @@ export async function POST(request: Request) {
       },
     });
 
-    // Store challenge in a secure cookie for verification step
-    const cookieStore = await cookies();
-    cookieStore.set('registration_challenge', options.challenge, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 60 * 5, // 5 minutes
-    });
+    // Store challenge in the database for session-less verification
+    const { error: challengeError } = await supabaseAdmin
+      .from('challenges')
+      .insert({
+        challenge: options.challenge,
+        type: 'registration',
+        user_id_hint: username,
+        expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(), // 5 minutes
+      });
+
+    if (challengeError) {
+      console.error('Challenge DB sync failure:', challengeError);
+      throw new Error(`Vault Handshake Error: ${challengeError.message}`);
+    }
+
+    console.log(`[Register] Challenge persisted for ${username}`);
 
     return NextResponse.json(options);
   } catch (error: any) {

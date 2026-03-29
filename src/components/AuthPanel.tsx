@@ -36,6 +36,7 @@ export default function AuthPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
+          challenge: options.challenge, // Pass explicit challenge for DB lookup
           authenticationResponse,
         }),
       });

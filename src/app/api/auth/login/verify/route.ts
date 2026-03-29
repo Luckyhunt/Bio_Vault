@@ -17,40 +17,50 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { username, authenticationResponse } = body;
+    const { username, challenge, authenticationResponse } = body;
 
-    if (!username || !authenticationResponse) {
+    if (!username || !challenge || !authenticationResponse) {
       return NextResponse.json({ error: 'Missing required login data' }, { status: 400 });
     }
 
-    const cookieStore = await cookies();
-    const expectedChallenge = cookieStore.get('authentication_challenge')?.value;
+    // 1. Fetch and consume one-time challenge from DB (Vercel Hardening)
+    const { data: challengeData, error: challengeFetchError } = await supabaseAdmin
+      .from('challenges')
+      .select('*')
+      .eq('challenge', challenge)
+      .eq('type', 'authentication')
+      .single();
 
-    if (!expectedChallenge) {
-      return NextResponse.json({ error: 'Session expired. Please refresh and try again.' }, { status: 400 });
+    if (challengeFetchError || !challengeData) {
+      console.warn('[Login] Invalid or missing challenge');
+      return NextResponse.json({ error: 'Handshake invalid. Please try again.' }, { status: 401 });
+    }
+
+    // Security: Challenge must not be expired
+    if (new Date(challengeData.expires_at) < new Date()) {
+      await supabaseAdmin.from('challenges').delete().eq('id', challengeData.id);
+      return NextResponse.json({ error: 'Handshake expired. Please refresh.' }, { status: 401 });
     }
 
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    // 1. Find the passkey directly by credential ID
+    // 2. Find the passkey by binary ID (BYTEA Support)
+    const credentialIdBuffer = Buffer.from(authenticationResponse.id, 'base64url');
     const { data: passkey, error: pkError } = await supabaseAdmin
       .from('passkeys')
       .select('id, public_key, counter, user_id')
-      .eq('id', authenticationResponse.id)
+      .eq('id', credentialIdBuffer)
       .single();
 
     if (pkError || !passkey) {
-      console.warn('[Login] Passkey not found. Credential ID:', authenticationResponse.id);
-      return NextResponse.json({ 
-        error: 'Biometric key not recognized. Did you register on this device?',
-        debug_hint: `No passkey found for id: ${authenticationResponse.id}`
-      }, { status: 404 });
+      console.warn('[Login] Passkey not found for binary ID');
+      return NextResponse.json({ error: 'Biometric key not recognized.' }, { status: 404 });
     }
 
-    // 2. Verify username ownership
+    // 3. Verify profile link
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('id, username')
+      .select('id, username, wallet_address')
       .eq('id', passkey.user_id)
       .single();
 
@@ -64,33 +74,27 @@ export async function POST(request: Request) {
     // 3. Verify WebAuthn authentication (MANIFESTO GRADE)
     let verification;
     try {
-      // THE NATIVE RECONSTRUCTION: Uses Node.js native engine
-      const publicKeyBytes = fromBase64URL(passkey.public_key);
+      // THE NATIVE RECONSTRUCTION: Ensure we treat the DB key as raw binary (BYTEA)
+      const publicKeyBytes = passkey.public_key instanceof Uint8Array 
+        ? passkey.public_key 
+        : new Uint8Array(Buffer.from(passkey.public_key as any, 'hex'));
 
-      // MANIFESTO DIAGNOSTICS: Check incoming client data lengths
+      // MANIFESTO DIAGNOSTICS
       console.log('--- LOGIN HANDSHAKE DIAGNOSIS ---');
       console.log('User:', cleanUsername);
-      console.log('DB Public Key (hex start):', Buffer.from(publicKeyBytes).toString('hex').slice(0, 20));
-      console.log('DB Public Key length:', publicKeyBytes.length);
-      console.log('Client Response ID:', authenticationResponse.id);
-      console.log('Signature length:', authenticationResponse.response.signature?.length);
+      console.log('ID Buffer Length:', credentialIdBuffer.length);
+      console.log('Public Key length:', publicKeyBytes.length);
+      console.log('Stored Counter:', passkey.counter);
       console.log('--- END DIAGNOSIS ---');
-
-      if (!publicKeyBytes || publicKeyBytes.length === 0) {
-        return NextResponse.json({
-          error: 'Vault key data is corrupted',
-          debug_hint: `Zero length key for id: ${passkey.id}`
-        }, { status: 400 });
-      }
 
       verification = await verifyAuthenticationResponse({
         response: authenticationResponse,
-        expectedChallenge,
+        expectedChallenge: challengeData.challenge,
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: {
           id: passkey.id,
-          publicKey: publicKeyBytes as any, // Bypass strict type check
+          publicKey: publicKeyBytes as any,
           counter: Number(passkey.counter),
         },
         requireUserVerification: false,
@@ -109,52 +113,46 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    if (!verification.verified) {
-      return NextResponse.json({ verified: false, error: 'Biometric check failed' }, { status: 400 });
+    // 5. ONE-TIME USE: Consume challenge immediately
+    await supabaseAdmin.from('challenges').delete().eq('id', challengeData.id);
+
+    if (verification.verified && verification.authenticationInfo) {
+      const { newCounter } = verification.authenticationInfo;
+
+      // 6. Counter Security (Replay Attack Protection)
+      if (newCounter <= Number(passkey.counter)) {
+        console.error('[Login] SECURITY ALERT: Counter regression!', { newCounter, stored: passkey.counter });
+        return NextResponse.json({ error: 'Security violation: Probable cloned authenticator detected.' }, { status: 403 });
+      }
+
+      // 7. Update counter & last used
+      await supabaseAdmin
+        .from('passkeys')
+        .update({ counter: newCounter, last_used_at: new Date().toISOString() })
+        .eq('id', passkey.id);
+
+      // Create session via Magic Link logic (Original requirement)
+      const email = `${cleanUsername}@biovault.local`;
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'magiclink',
+        email,
+      });
+
+      if (linkError) throw new Error(`Auth Session Error: ${linkError.message}`);
+
+      return NextResponse.json({ 
+        verified: true,
+        walletAddress: profile.wallet_address,
+        redirectUrl: linkData.properties.action_link 
+      });
+    } else {
+      return NextResponse.json({ error: 'Biometric verification returned false' }, { status: 401 });
     }
-
-    // 4. Update replay-attack counter
-    await supabaseAdmin
-      .from('passkeys')
-      .update({ counter: verification.authenticationInfo.newCounter, last_used_at: new Date().toISOString() })
-      .eq('id', passkey.id);
-
-    // 5. Create a real session using admin API
-    // We sign them in directly using the stored email — no magic link redirect needed
-    const email = `${cleanUsername}@biovault.local`;
-    
-    const { data: userData } = await supabaseAdmin.auth.admin.getUserById(passkey.user_id);
-    
-    if (!userData?.user) {
-      throw new Error('User account not found in auth system');
-    }
-
-    // Generate a session link and extract the token from it for client-side sign-in
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email,
-    });
-
-    if (linkError) {
-      console.error('[Login] Failed to generate auth link:', linkError);
-      throw new Error(linkError.message);
-    }
-
-    cookieStore.delete('authentication_challenge');
-
-    // Return token directly so frontend can set session without relying on redirect
+  } catch (err: any) {
+    console.error('CRITICAL: Login verify failure:', err);
     return NextResponse.json({ 
-      verified: true,
-      redirectUrl: linkData.properties.action_link,
-      // Also provide the email so client can use Supabase JS to handle session
-      userEmail: email,
-    });
-
-  } catch (error: any) {
-    console.error('[Login] CRITICAL failure:', error.message);
-    return NextResponse.json({ 
-      error: 'Login failed. Please try again.',
-      debug_hint: error.message
+      error: 'Unable to verify biometric login', 
+      debug_hint: process.env.NODE_ENV === 'development' ? err.message : undefined 
     }, { status: 500 });
   }
 }
