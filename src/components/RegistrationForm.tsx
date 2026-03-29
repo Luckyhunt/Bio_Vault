@@ -67,18 +67,28 @@ export default function RegistrationForm() {
           router.push('/dashboard');
         }, 2000);
       } else {
-        // Use debug_hint in dev if available
-        const errorDetail = verification.debug_hint ? ` (${verification.debug_hint})` : '';
-        throw new Error((verification.error || 'Verification failed') + errorDetail);
+        // Detailed error reporting for the stabilization phase
+        const hint = verification.debug_hint ? ` [Diagnostic: ${verification.debug_hint}]` : '';
+        const msg = verification.error || 'Identity verification failed';
+        throw new Error(`${msg}${hint}`);
       }
     } catch (err: any) {
-      console.error(err);
+      console.error('[Register] Error:', err);
       setStatus('error');
-      setErrorMsg(err.message || 'Something went wrong. Try again.');
+      
+      // Smart Error Mapping
+      if (err.message.includes('429') || err.message.includes('Too many')) {
+        setErrorMsg('Security Guard: Too many attempts. Please wait 5 minutes before trying again.');
+      } else if (err.message.includes('Handshake')) {
+        setErrorMsg('Biometric handshake timed out or was cancelled by the system.');
+      } else {
+        setErrorMsg(err.message || 'Vault initialization failed. Please refresh and try again.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="w-full max-w-md mx-auto p-8 rounded-3xl bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl">

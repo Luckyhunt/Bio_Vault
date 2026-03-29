@@ -32,8 +32,17 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
     setLoading(false);
   };
 
-  const deletePasskey = async (id: string) => {
-    if (!confirm('Are you sure? Once deleted, this device will no longer have access to your BioVault.')) return;
+  const deletePasskey = async (id: string, isPrimary: boolean) => {
+    if (passkeys.length <= 1) {
+      alert("CRITICAL GUARDRAIL: You cannot delete your last passkey. If you do, you will lose access to your BioVault forever. Please register another device first.");
+      return;
+    }
+
+    const warning = isPrimary 
+      ? 'WARNING: You are deleting your PRIMARY device. This is the device used to derive your wallet address. Are you sure?' 
+      : 'Are you sure you want to remove this device?';
+      
+    if (!confirm(warning)) return;
     
     const { error } = await supabase.from('passkeys').delete().eq('id', id);
     if (error) {
@@ -42,6 +51,7 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
       fetchPasskeys();
     }
   };
+
 
   return (
     <AnimatePresence>
@@ -77,33 +87,42 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
                   <p className="text-sm font-bold animate-pulse uppercase tracking-widest">Scanning Vault...</p>
                 </div>
               ) : passkeys.length > 0 ? (
-                passkeys.map((pk) => (
-                  <div key={pk.id} className="p-5 rounded-3xl bg-white/5 border border-white/5 flex items-center justify-between group">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-2xl bg-indigo-500/10">
-                        {pk.credential_device_type === 'singleDevice' ? (
-                          <Smartphone className="w-5 h-5 text-indigo-400" />
-                        ) : (
-                          <Monitor className="w-5 h-5 text-blue-400" />
-                        )}
+                passkeys.map((pk, idx) => {
+                  const isPrimary = idx === 0; // The first passkey registered is the primary identity
+                  return (
+                    <div key={pk.id} className="p-5 rounded-3xl bg-white/5 border border-white/5 flex items-center justify-between group relative overflow-hidden">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 rounded-2xl bg-indigo-500/10">
+                          {pk.device_type === 'singleDevice' ? (
+                            <Smartphone className="w-5 h-5 text-indigo-400" />
+                          ) : (
+                            <Monitor className="w-5 h-5 text-blue-400" />
+                          )}
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-white/80 uppercase tracking-tighter"> Device {idx + 1} </span>
+                            {isPrimary && (
+                              <span className="text-[8px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded-full font-black uppercase tracking-widest"> Primary </span>
+                            )}
+                          </div>
+                          <code className="text-[10px] text-white/40 font-mono tracking-tight">
+                            {pk.id.slice(0, 16)}...
+                          </code>
+                        </div>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white/80 uppercase tracking-tighter">Device Identifier</span>
-                        <code className="text-[10px] text-white/40 font-mono tracking-tight">
-                          {pk.id.startsWith('\\x') ? pk.id.slice(2, 18) : pk.id.slice(0, 16)}...
-                        </code>
-                      </div>
+                      <button 
+                        onClick={() => deletePasskey(pk.id, isPrimary)}
+                        className="p-3 rounded-2xl bg-red-400/5 hover:bg-red-400/20 text-red-400/40 hover:text-red-400 transition-all sm:opacity-0 group-hover:opacity-100"
+                        title="Delete Passkey"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => deletePasskey(pk.id)}
-                      className="p-3 rounded-2xl bg-red-400/5 hover:bg-red-400/20 text-red-400/40 hover:text-red-400 transition-all sm:opacity-0 group-hover:opacity-100"
-                      title="Delete Passkey"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               ) : (
+
                 <p className="text-center text-white/40 italic py-8">No passkeys found in the vault.</p>
               )}
 
