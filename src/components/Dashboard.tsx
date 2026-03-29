@@ -54,15 +54,12 @@ export default function Dashboard({ user }: { user: any }) {
     setIsSending(true);
     try {
       console.log('[Dashboard] Initializing Passkey Client...');
-      const client = await createPasskeySmartAccountClient(
+      const { client, isDeployed } = await createPasskeySmartAccountClient(
         passkey.id, 
         passkey.public_key
       );
 
-      console.log('[Dashboard] Identity Audit:', {
-        derived: client.account.address,
-        stored: address
-      });
+      console.log('[Dashboard] Account State:', isDeployed ? 'Active' : 'Deploying on-chain...');
 
       console.log('[Dashboard] Signing Transaction...');
       // ARCHITECTURAL FIX: Force high gas limits for the first-time deployment simulation
@@ -73,6 +70,7 @@ export default function Dashboard({ user }: { user: any }) {
         verificationGasLimit: BigInt(1500000), // High limit for P-256 + Factory
         preVerificationGas: BigInt(100000),
       });
+
 
       console.log('[Dashboard] Tx Hash:', hash);
       alert(`Success! Biometric Transaction Authorized!\nHash: ${hash}`);
