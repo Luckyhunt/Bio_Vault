@@ -3,7 +3,7 @@ import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { rpID } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
-import { toUint8Array } from '@/lib/encoding';
+
 
 
 // 🔒 STRICT TRANSPORT SANITIZER (Prevents SimpleWebAuthn v13 Crashes)
@@ -61,21 +61,18 @@ export async function POST(request: Request) {
     let invalidCount = 0;
 
     for (const pk of passkeys) {
-      try {
-        if (!pk.id) throw new Error("Missing ID");
-        
-        console.log("[Login Options] Final ID for browser:", pk.id);
-
-        validCredentials.push({
-          id: toUint8Array(pk.id), // Convert Base64URL string to Uint8Array for SimpleWebAuthn
-          type: 'public-key' as const,
-          transports: sanitizeTransports(pk.transports),
-        });
-
-      } catch (err: any) {
-        console.warn("[SKIP BAD KEY]", err.message);
+      if (!pk.id) {
         invalidCount++;
+        continue;
       }
+      
+      console.log("[Login Options] Final ID for browser:", pk.id);
+
+      validCredentials.push({
+        id: pk.id, // ✅ STRING DIRECT
+        type: 'public-key' as const,
+        transports: sanitizeTransports(pk.transports),
+      });
     }
 
     console.log("PASSKEY DEBUG:", {
