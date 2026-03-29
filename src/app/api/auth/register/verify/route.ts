@@ -3,7 +3,7 @@ import { verifyRegistrationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
-import { toBase64URL } from '@/lib/encoding';
+import { toBase64URL, toUint8Array } from '@/lib/encoding';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -104,13 +104,13 @@ export async function POST(request: Request) {
         userId = authUser.user.id;
       }
 
-      // 5. Store Passkey (Brick by Brick Binary Storage)
+      // 5. Store Passkey (TRUE BINARY RECTIFICATION)
       const { error: dbError } = await supabaseAdmin
         .from('passkeys')
         .insert({
-          id: Buffer.from(credentialID), // BYTEA
+          id: Buffer.from(toUint8Array(credentialID)), // Forces raw binary, not ASCII chars
           user_id: userId,
-          public_key: Buffer.from(credentialPublicKey), // BYTEA
+          public_key: Buffer.from(toUint8Array(credentialPublicKey)), // Forces raw binary
           counter,
           credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
           credential_backed_up: verification.registrationInfo.credentialBackedUp || false,
