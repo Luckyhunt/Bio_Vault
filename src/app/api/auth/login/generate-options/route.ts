@@ -59,11 +59,11 @@ export async function POST(request: Request) {
       const options = await generateAuthenticationOptions({
         rpID,
         allowCredentials: passkeys.map((pk: any) => ({
-          // LIBRARY REQUIREMENT: id MUST be a Base64URL string in the options JSON
-          id: toBase64URL(toUint8Array(pk.id)),
+          // PASS RAW BYTES: The library handles JSON serialization natively
+          id: toUint8Array(pk.id),
           type: 'public-key' as const,
           transports: pk.transports || [],
-        })),
+        })) as any,
         userVerification: 'required',
       });
 
