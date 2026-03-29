@@ -44,19 +44,19 @@ export async function POST(request: Request) {
 
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    // 2. Find the passkey by binary ID (BYTEA Support - TRUE BINARY LOOKUP)
-    const binaryId = toUint8Array(authenticationResponse.id);
+    // 2. Find the passkey by string ID (DIRECT STRING MATCH)
+    const stringId = authenticationResponse.id;
     const { data: passkey, error: pkError } = await supabaseAdmin
       .from('passkeys')
       .select('id, public_key, counter, user_id')
-      .eq('id', Buffer.from(binaryId)) // Use Buffer for explicit BYTEA matching
+      .eq('id', stringId) // String-to-string match logic
       .single();
 
     if (pkError || !passkey) {
-      console.error('[Login] Passkey not found for binary ID:', pkError?.message);
+      console.error('[Login] Passkey not found for string ID:', pkError?.message);
       return NextResponse.json({ 
         error: 'Biometric key not recognized.',
-        debug_hint: pkError?.message || 'ID Bitwise Mismatch in DB'
+        debug_hint: pkError?.message || 'ID Character Mismatch in DB'
       }, { status: 404 });
     }
 

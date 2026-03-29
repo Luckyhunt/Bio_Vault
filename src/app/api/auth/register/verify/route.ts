@@ -104,13 +104,13 @@ export async function POST(request: Request) {
         userId = authUser.user.id;
       }
 
-      // 5. Store Passkey (TRUE BINARY RECTIFICATION)
+      // 5. Store Passkey (STRING STABILITY RECTIFICATION)
       const { error: dbError } = await supabaseAdmin
         .from('passkeys')
         .insert({
-          id: Buffer.from(toUint8Array(credentialID)), // Forces raw binary, not ASCII chars
+          id: toBase64URL(toUint8Array(credentialID)), // Clean string storage
           user_id: userId,
-          public_key: Buffer.from(toUint8Array(credentialPublicKey)), // Forces raw binary
+          public_key: toBase64URL(toUint8Array(credentialPublicKey)), // Clean string storage
           counter,
           credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
           credential_backed_up: verification.registrationInfo.credentialBackedUp || false,
