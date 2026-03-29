@@ -29,17 +29,25 @@ export default function Dashboard({ user }: { user: any }) {
     const initWallet = async () => {
       if (!user) return;
       
-      const { data: passkeys, error } = await supabase
+      const { data: passkeys, error, status } = await supabase
         .from('passkeys')
         .select('*')
         .eq('user_id', user.id)
         .limit(1);
 
-      if (error || !passkeys?.[0]) {
-        console.error('Failed to load passkey:', error);
-        setAddress('No Passkey Found');
+      if (error) {
+        console.error('[Dashboard] Supabase Query Error:', error);
+        setAddress(`Error: ${error.message}`);
         return;
       }
+
+      if (!passkeys || passkeys.length === 0) {
+        console.warn('[Dashboard] Security Warning: No passkey found for this user ID. RLS might be blocking access or the record was not created.');
+        setAddress('Passkey Not Found');
+        return;
+      }
+
+      console.log('[Dashboard] Passkey loaded successfully');
 
       const pk = passkeys[0];
       setPasskey(pk);
