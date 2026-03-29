@@ -14,39 +14,65 @@ import {
   ChevronRight,
   Fingerprint
 } from 'lucide-react';
-import { startAuthentication } from '@simplewebauthn/browser';
+import { Hex } from 'viem';
 import Image from 'next/image';
+import { supabase } from '@/lib/supabase';
+import { createPasskeySmartAccountClient } from '@/lib/smart-wallet';
 
 export default function Dashboard({ user }: { user: any }) {
   const [balance, setBalance] = useState('0.00');
   const [isSending, setIsSending] = useState(false);
   const [address, setAddress] = useState('0x...');
+  const [passkey, setPasskey] = useState<any>(null);
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      const addr = user?.user_metadata?.wallet_address;
-      setAddress(addr || 'Generating...');
+    const initWallet = async () => {
+      if (!user) return;
+      
+      const { data: passkeys, error } = await supabase
+        .from('passkeys')
+        .select('*')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (error || !passkeys?.[0]) {
+        console.error('Failed to load passkey:', error);
+        setAddress('No Passkey Found');
+        return;
+      }
+
+      const pk = passkeys[0];
+      setPasskey(pk);
+      setAddress(user?.user_metadata?.wallet_address || 'Generating...');
     };
-    fetchProfile();
+    initWallet();
   }, [user]);
 
   const handleSend = async () => {
+    if (!passkey || isSending) return;
+    
     setIsSending(true);
     try {
-      // In a real system, we fetch sign options from backend
-      const optionsResp = await fetch('/api/auth/login/generate-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: user.user_metadata.username }),
-      });
-      const options = await optionsResp.json();
+      // 1. Instantiate the Coinbase Smart Account Patiently
+      console.log('[Dashboard] Initializing Passkey Client...');
+      const client = await createPasskeySmartAccountClient(
+        passkey.id, 
+        passkey.public_key as Hex
+      );
 
-      // Trigger biometric prompt for transaction authorization
-      await startAuthentication({ optionsJSON: options });
-      
-      alert('Biometric Signature Verified! Transaction Sent via Pimlico Bundler.');
-    } catch (err) {
-      console.error(err);
+      // 2. Perform execution (Self-sending 0 ETH as a generic test tx)
+      console.log('[Dashboard] Signing Transaction...');
+      const hash = await client.sendTransaction({
+        to: client.account.address,
+        value: BigInt(0),
+        data: '0x'
+      });
+
+      console.log('[Dashboard] Tx Hash:', hash);
+      alert(`Success! Transaction sponsored and sent!\nHash: ${hash}`);
+    } catch (err: any) {
+      console.error('[Dashboard] Transaction Failure:', err);
+      alert(`Transaction Error: ${err.message || 'Unknown Error'}`);
     } finally {
       setIsSending(false);
     }

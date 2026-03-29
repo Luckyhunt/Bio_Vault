@@ -2,44 +2,62 @@ import { createPublicClient, http, Hash, Hex } from 'viem';
 import { mainnet, polygonAmoy } from 'viem/chains';
 import { createSmartAccountClient } from 'permissionless';
 import { createPimlicoClient } from 'permissionless/clients/pimlico';
+import { toCoinbaseSmartAccount, toWebAuthnAccount } from 'viem/account-abstraction';
 
 // For this MVP, we use Polygon Amoy (Testnet)
 export const chain = polygonAmoy;
 
-// Using Pimlico as our Bundler (Free tier)
+// Using Pimlico as our Bundler and Paymaster (Free tier)
 export const transport = http(process.env.NEXT_PUBLIC_BUNDLER_RPC_URL);
 
 export const publicClient = createPublicClient({
   chain,
-  transport: http(),
+  transport,
 });
 
 export const bundlerClient = createPimlicoClient({
   chain,
   transport,
   entryPoint: {
-    address: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789" as `0x${string}`,
-    version: "0.6" as const,
+    address: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789', // EntryPoint v0.6
+    version: '0.6',
   },
 });
 
 /**
- * Derives the Smart Account address from a user's Public Key.
- * In a production BioVault, this would use a specialized factory 
- * that validates secp256r1 signatures.
+ * Derives and instantiates a fully Paymaster-enabled Coinbase Smart Account powered by a WebAuthn (Passkey) Signer.
+ * 
+ * @param passkeyId The exact Base64URL string ID of the passkey
+ * @param publicKeyHex The hex-encoded public key bytes
  */
-export async function getSmartAccountAddress(publicKeyHex: string): Promise<`0x${string}`> {
-  // Simplified derivation for the MVP:
-  // We'll treat the hash of the public key as the owner address for a standard SimpleAccount
-  // In Phase 7/8, we wrap this into a full ERC-4337 UserOperation.
-  const ownerAddress = `0x${publicKeyHex.slice(0, 40)}` as `0x${string}`;
-  return ownerAddress; // Placeholder for actual AA factory integration
-}
+export async function createPasskeySmartAccountClient(passkeyId: string, publicKeyHex: Hex) {
+  // 1. Create the WebAuthn Signer natively with viem
+  const webAuthnAccount = toWebAuthnAccount({
+    credential: {
+      id: passkeyId,
+      publicKey: publicKeyHex,
+    },
+  });
 
-/**
- * Sign a transaction hash using the WebAuthn Passkey (handled on frontend)
- * This utility prepares the hash for the browser's credentials.get()
- */
-export function prepareTransactionHash(hash: Hash): ArrayBuffer {
-  return new Uint8Array(Buffer.from(hash.slice(2), 'hex')).buffer;
+  // 2. Wrap the Signer into an ERC-4337 Coinbase Smart Account Configuration
+  const smartAccount = await toCoinbaseSmartAccount({
+    client: publicClient,
+    owners: [webAuthnAccount],
+    version: '1' as any,
+  });
+
+  // 3. Create the Smart Account Client with Pimlico Paymaster sponsorship
+  const smartAccountClient = createSmartAccountClient({
+    account: smartAccount,
+    chain,
+    bundlerTransport: transport,
+    paymaster: bundlerClient, // Free Tier Pimlico Paymaster
+    userOperation: {
+      estimateFeesPerGas: async () => {
+        return (await bundlerClient.getUserOperationGasPrice()).fast;
+      },
+    },
+  });
+
+  return smartAccountClient;
 }
