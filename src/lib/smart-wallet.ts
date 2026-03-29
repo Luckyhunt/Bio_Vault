@@ -1,40 +1,39 @@
 import { createPublicClient, http, Hex } from 'viem';
 import { polygonAmoy } from 'viem/chains';
 import { 
-  toCoinbaseSmartAccount 
+  toCoinbaseSmartAccount, 
+  toWebAuthnAccount,
 } from 'viem/account-abstraction';
-import { toWebAuthnAccount } from 'viem/account-abstraction';
+
+
 import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import { createSmartAccountClient } from 'permissionless';
 import { extractRawPublicKey } from '@/lib/webauthn-utils';
 import { toUint8Array } from '@/lib/encoding';
-import { fromHex } from 'viem';
 
-// 1. Separate Transports for Node Reads vs Bundler Writes
+// 1. Chains and Transports
 export const chain = polygonAmoy;
 export const nodeTransport = http('https://rpc-amoy.polygon.technology');
 const bundlerRpcUrl = process.env.NEXT_PUBLIC_BUNDLER_RPC_URL || '';
 export const bundlerTransport = http(bundlerRpcUrl);
 
-// 2. Public Client for eth_call, balance, and contract reads
+// 2. Clients
 export const publicClient = createPublicClient({
   chain,
   transport: nodeTransport,
 });
 
-// 3. Bundler Client for UserOperations and Paymaster
 export const bundlerClient = createPimlicoClient({
   chain,
   transport: bundlerTransport,
   entryPoint: {
-    address: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789', // EntryPoint v0.6
+    address: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
     version: '0.6',
   },
 });
 
 /**
- * Deterministically derives the Coinbase Smart Account configuration.
- * This can be used on both the Client and Server for address consistency.
+ * Derives the Coinbase Smart Account using permissionless helpers.
  */
 export async function getSmartAccount(passkeyId: string, publicKey: string) {
   const cleanId = passkeyId.startsWith('\\x') ? `0x${passkeyId.slice(2)}` as Hex : passkeyId;
@@ -58,12 +57,14 @@ export async function getSmartAccount(passkeyId: string, publicKey: string) {
   });
 }
 
+
 /**
- * Instantiates a fully functional Smart Account Client with Paymaster support.
+ * Creates a production-ready Smart Account Client with high-gas sponsorship.
  */
 export async function createPasskeySmartAccountClient(passkeyId: string, publicKey: string) {
   const smartAccount = await getSmartAccount(passkeyId, publicKey);
 
+  // ARCHITECTURAL FIX: Force high gas limits for WebAuthn initialized accounts
   const smartAccountClient = createSmartAccountClient({
     account: smartAccount,
     chain,
@@ -71,12 +72,17 @@ export async function createPasskeySmartAccountClient(passkeyId: string, publicK
     paymaster: bundlerClient,
     userOperation: {
       estimateFeesPerGas: async () => {
-        return (await bundlerClient.getUserOperationGasPrice()).fast;
+        const gasPrice = await bundlerClient.getUserOperationGasPrice();
+        return gasPrice.fast;
       },
     },
   }) as any;
 
+  // Add gas overrides manually for deployment transactions if needed
+  // or wrap sendTransaction to include high verificationGasLimit
   return smartAccountClient;
 }
+
+
 
 

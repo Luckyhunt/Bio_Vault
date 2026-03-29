@@ -56,14 +56,22 @@ export default function Dashboard({ user }: { user: any }) {
       console.log('[Dashboard] Initializing Passkey Client...');
       const client = await createPasskeySmartAccountClient(
         passkey.id, 
-        passkey.public_key as Hex
+        passkey.public_key
       );
 
+      console.log('[Dashboard] Identity Audit:', {
+        derived: client.account.address,
+        stored: address
+      });
+
       console.log('[Dashboard] Signing Transaction...');
-      const hash = await client.sendTransaction({
+      // ARCHITECTURAL FIX: Force high gas limits for the first-time deployment simulation
+      const hash = await (client as any).sendTransaction({
         to: client.account.address,
         value: BigInt(0),
-        data: '0x'
+        data: '0x',
+        verificationGasLimit: BigInt(1500000), // High limit for P-256 + Factory
+        preVerificationGas: BigInt(100000),
       });
 
       console.log('[Dashboard] Tx Hash:', hash);
@@ -72,12 +80,15 @@ export default function Dashboard({ user }: { user: any }) {
       import('@/lib/explorer').then(m => m.getTransactionHistory(address)).then(setTransactions);
     } catch (err: any) {
       console.error('[Dashboard] Transaction Failure:', err);
-      alert(`Transaction Error: ${err.message || 'Unknown Error'}`);
+      // Detailed error hints for ERC-4337 simulation
+      const hint = err.message.includes('AA13') ? '\n\nHint: Smart Account Initialization failed. Checking gas sponsorship.' : '';
+      alert(`Transaction Error: ${err.message}${hint}`);
     } finally {
       setIsSending(false);
       setShowSwap(false);
     }
   };
+
 
   const openExplorer = () => {
     if (address && address.startsWith('0x')) {
