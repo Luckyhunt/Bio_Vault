@@ -74,21 +74,10 @@ export async function POST(request: Request) {
       }, { status: 401 });
     }
 
-    // 4. Verify WebAuthn authentication (MANIFESTO GRADE)
+    // 4. Verify WebAuthn authentication (BEYOND STABLE: CHARACTER-PERFECT)
     let verification;
     try {
-      // THE NATIVE RECONSTRUCTION: BYTEA from Supabase (Base64 or Buffer)
-      const publicKeyBytes = toUint8Array(passkey.public_key);
-      const binaryId = toUint8Array(passkey.id);
-
-      // MANIFESTO DIAGNOSTICS: Check incoming binary integrity
-      console.log('--- LOGIN HANDSHAKE DIAGNOSIS ---');
-      console.log('User:', cleanUsername);
-      console.log('ID Type Handled:', typeof passkey.id);
-      console.log('ID Buffer Length:', binaryId.length);
-      console.log('Public Key length:', publicKeyBytes.length);
-      console.log('Stored Counter:', passkey.counter);
-      console.log('--- END DIAGNOSIS ---');
+      const publicKeyBytes = fromBase64URL(passkey.public_key);
 
       verification = await verifyAuthenticationResponse({
         response: authenticationResponse,
@@ -96,8 +85,8 @@ export async function POST(request: Request) {
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: {
-          id: toBase64URL(binaryId),
-          publicKey: publicKeyBytes as any,
+          id: passkey.id, // ✅ CLEAN STRING PASS-THROUGH
+          publicKey: publicKeyBytes as any, // ✅ RAW BYTES FOR LIBRARY
           counter: Number(passkey.counter),
         },
         requireUserVerification: false,
