@@ -111,7 +111,8 @@ export async function POST(request: Request) {
       const { newCounter } = verification.authenticationInfo;
 
       // 6. Counter Security (Replay Attack Protection)
-      if (newCounter <= Number(passkey.counter)) {
+      // Note: Single-device authenticators like Apple FaceID / Windows Hello always return 0. Only check if newCounter > 0.
+      if (newCounter > 0 && newCounter <= Number(passkey.counter)) {
         console.error('[Login] SECURITY ALERT: Counter regression!', { newCounter, stored: passkey.counter });
         return NextResponse.json({ error: 'Security violation: Probable cloned authenticator detected.' }, { status: 403 });
       }
