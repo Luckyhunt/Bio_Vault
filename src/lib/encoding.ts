@@ -22,28 +22,44 @@ export function fromBase64URL(input: string): Uint8Array {
 }
 
 /**
- * THE UNIVERSAL BINARY ADAPTER (DEFENSIVE)
- * Standardizing on a single way to ingest binary from any source (Supabase, Browser, etc.)
+ * THE DEEP BINARY EXCAVATOR (ROBUST)
+ * Standardizing on a single recursive way to ingest binary from any source.
+ * Handles: Base64, Hex (\x or x), JSON-stringified Buffers, and raw Uint8Arrays.
  */
 export function toUint8Array(data: any): Uint8Array {
-  if (!data) throw new Error("Invalid binary data: null or undefined");
+  if (!data) throw new Error("No binary data provided (null or undefined)");
 
   // Case 1: Already a Uint8Array
   if (data instanceof Uint8Array) return data;
 
-  // Case 2: Base64 string from Supabase BYTEA string-serialization
-  if (typeof data === "string") {
-    return Uint8Array.from(Buffer.from(data, "base64"));
-  }
+  // Case 2: Node.js Buffer object
+  if (Buffer.isBuffer(data)) return new Uint8Array(data);
 
   // Case 3: Buffer JSON-serialization { type: 'Buffer', data: [...] }
   if (data.type === "Buffer" && Array.isArray(data.data)) {
     return new Uint8Array(data.data);
   }
 
-  // Case 4: Node.js Buffer object
-  if (Buffer.isBuffer(data)) {
-    return new Uint8Array(data);
+  // Case 4: String handling (Hex or Base64)
+  if (typeof data === "string") {
+    // 4a. Supabase/Postgres Hex format (\x7b or x7b)
+    if (data.startsWith('\\x') || data.startsWith('x')) {
+      const hex = data.startsWith('\\x') ? data.slice(2) : data.slice(1);
+      const decoded = Buffer.from(hex, 'hex');
+      
+      // RECURSIVE CHECK: Sometime Hex-decoding results in a JSON string (Meta-encoding)
+      try {
+        const str = decoded.toString('utf8');
+        if (str.startsWith('{')) {
+          return toUint8Array(JSON.parse(str));
+        }
+      } catch { /* Not a JSON string after Hex decode */ }
+      
+      return new Uint8Array(decoded);
+    }
+
+    // 4b. Base64 Handling (SimpleWebAuthn default)
+    return Uint8Array.from(Buffer.from(data, "base64"));
   }
 
   throw new Error(`Unsupported binary format: ${typeof data}`);

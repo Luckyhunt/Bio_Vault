@@ -3,26 +3,9 @@ import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { rpID } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
+import { toUint8Array } from '@/lib/encoding';
 
-// 🔥 UNIVERSAL BINARY ADAPTER (CRITICAL FIX)
-function toUint8ArraySafe(data: any): Uint8Array {
-  if (!data) throw new Error("No data provided");
 
-  // Already Uint8Array
-  if (data instanceof Uint8Array) return data;
-
-  // Base64 string (Supabase BYTEA default)
-  if (typeof data === "string") {
-    return Uint8Array.from(Buffer.from(data, "base64"));
-  }
-
-  // Buffer-like object
-  if (data.type === "Buffer" && Array.isArray(data.data)) {
-    return new Uint8Array(data.data);
-  }
-
-  throw new Error("Unsupported binary format");
-}
 
 function toBase64URL(buffer: Uint8Array) {
   return Buffer.from(buffer)
@@ -88,7 +71,7 @@ export async function POST(request: Request) {
 
     for (const pk of passkeys) {
       try {
-        const binaryId = toUint8ArraySafe(pk.id);
+        const binaryId = toUint8Array(pk.id);
 
         if (!binaryId || binaryId.length < 16) {
           throw new Error("Invalid length");
