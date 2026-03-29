@@ -93,12 +93,13 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
                     <div key={pk.id} className="p-5 rounded-3xl bg-white/5 border border-white/5 flex items-center justify-between group relative overflow-hidden">
                       <div className="flex items-center gap-4">
                         <div className="p-3 rounded-2xl bg-indigo-500/10">
-                          {pk.device_type === 'singleDevice' ? (
+                          {pk.credential_device_type === 'singleDevice' ? (
                             <Smartphone className="w-5 h-5 text-indigo-400" />
                           ) : (
                             <Monitor className="w-5 h-5 text-blue-400" />
                           )}
                         </div>
+
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-white/80 uppercase tracking-tighter"> Device {idx + 1} </span>

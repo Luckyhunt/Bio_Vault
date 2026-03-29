@@ -127,9 +127,10 @@ export async function POST(request: Request) {
           user_id: userId,
           public_key: toBase64URL(credentialPublicKey), 
           counter,
-          device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
+          credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
           transports: attestationResponse.response.transports || [],
         });
+
 
       if (dbError) throw new Error(`Vault DB Error: ${dbError.message}`);
 
