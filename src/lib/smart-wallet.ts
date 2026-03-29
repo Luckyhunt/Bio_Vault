@@ -6,6 +6,9 @@ import {
 import { toWebAuthnAccount } from 'viem/account-abstraction';
 import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import { createSmartAccountClient } from 'permissionless';
+import { extractRawPublicKey } from '@/lib/webauthn-utils';
+import { toUint8Array } from '@/lib/encoding';
+import { fromHex } from 'viem';
 
 // 1. Separate Transports for Node Reads vs Bundler Writes
 export const chain = polygonAmoy;
@@ -36,18 +39,26 @@ export const bundlerClient = createPimlicoClient({
  * @param passkeyId The exact Base64URL string ID of the passkey
  * @param publicKeyHex The raw 64-byte hex-encoded public key coordinates
  */
-export async function createPasskeySmartAccountClient(passkeyId: string, publicKeyHex: Hex) {
-  // Normalize IDs from Supabase/Postgres BYTEA prefixes (\x -> 0x)
+export async function createPasskeySmartAccountClient(passkeyId: string, publicKey: string) {
+  // 1. Normalize IDs and Keys from Supabase (Handles both standard and BYTEA formats)
   const cleanId = passkeyId.startsWith('\\x') ? `0x${passkeyId.slice(2)}` as Hex : passkeyId;
-  const cleanPublicKey = publicKeyHex.startsWith('\\x') ? `0x${publicKeyHex.slice(2)}` as Hex : publicKeyHex;
+  const cleanPublicKey = publicKey.startsWith('\\x') ? `0x${publicKey.slice(2)}` : publicKey;
 
-  // 1. Create the WebAuthn Signer natively with viem
+  // 2. STABILIZATION: Convert stored COSE key to Raw Coordinates for the EVM
+  // If the key is Base64 (Standard), we decode and extract.
+  // This is the CRITICAL fix for the AA13 error.
+  const rawPublicKey = cleanPublicKey.startsWith('0x') 
+    ? cleanPublicKey as Hex 
+    : extractRawPublicKey(toUint8Array(cleanPublicKey)) as Hex;
+
+  // 3. Create the WebAuthn Signer natively with viem
   const webAuthnAccount = toWebAuthnAccount({
     credential: {
       id: cleanId,
-      publicKey: cleanPublicKey,
+      publicKey: rawPublicKey,
     },
   });
+
 
   // 2. Wrap the Signer into an ERC-4337 Coinbase Smart Account Configuration
   // This derives the Smart Account address using the public key owners.

@@ -106,18 +106,15 @@ export async function POST(request: Request) {
         userId = authUser.user.id;
       }
 
-      // 5. Store Passkey (STABILIZED: Raw X,Y coordinates for EVM factory compatibility)
-      const rawPublicKey = extractRawPublicKey(new Uint8Array(credentialPublicKey));
-      
+      // 5. Store Passkey (RESTORED: Aligned with SQL Schema)
       const { error: dbError } = await supabaseAdmin
         .from('passkeys')
         .insert({
           id: attestationResponse.id, 
           user_id: userId,
-          public_key: rawPublicKey, // Store raw 0x... hex
+          public_key: toBase64URL(toUint8Array(credentialPublicKey)), 
           counter,
-          credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
-          credential_backed_up: verification.registrationInfo.credentialBackedUp || false,
+          device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
           transports: attestationResponse.response.transports || [],
         });
 
