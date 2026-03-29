@@ -1,30 +1,20 @@
 /**
- * WEB-AUTHN ENCODING MANIFESTO
- * Alignment with absolute production standards for binary ↔ text.
+ * WEB-AUTHN ENCODING RESTORATION
+ * Uses native Node.js 'base64url' for 100% cryptographic accuracy.
  */
 
 /**
  * Converts a Uint8Array (binary key) to a strict Base64URL string
- * Uses the precise replace/strip pattern from the manifesto.
+ * No manual replacement or padding needed — uses native 'base64url' encoding.
  */
 export function toBase64URL(buffer: Uint8Array): string {
-  return Buffer.from(buffer)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, ''); // Exact regex for trailing padding removal
+  return Buffer.from(buffer).toString('base64url');
 }
 
 /**
  * Converts a Base64URL string back to a Uint8Array for biometric verification
- * Uses the exact .padEnd formula for 100% reliable reconstruction.
  */
 export function fromBase64URL(input: string): Uint8Array {
-  // THE CRITICAL MANIFESTO PAD: Ensures 4-character boundary alignment
-  const base64 = input
-    .replace(/-/g, '+')
-    .replace(/_/g, '/')
-    .padEnd(input.length + (4 - (input.length % 4)) % 4, '=');
-
-  return new Uint8Array(Buffer.from(base64, 'base64'));
+  // Native 'base64url' decoding correctly handles missing padding of 4-character boundaries.
+  return new Uint8Array(Buffer.from(input, 'base64url'));
 }

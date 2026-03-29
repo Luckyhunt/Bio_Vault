@@ -64,16 +64,15 @@ export async function POST(request: Request) {
     // 3. Verify WebAuthn authentication (MANIFESTO GRADE)
     let verification;
     try {
-      // THE MANIFESTO DECODE: Reconstructs exact bytes from DB storage
+      // THE NATIVE RECONSTRUCTION: Uses Node.js native engine
       const publicKeyBytes = fromBase64URL(passkey.public_key);
 
       // MANIFESTO DIAGNOSTICS: Check incoming client data lengths
       console.log('--- LOGIN HANDSHAKE DIAGNOSIS ---');
       console.log('User:', cleanUsername);
+      console.log('DB Public Key (hex start):', Buffer.from(publicKeyBytes).toString('hex').slice(0, 20));
       console.log('DB Public Key length:', publicKeyBytes.length);
       console.log('Client Response ID:', authenticationResponse.id);
-      console.log('Client Data JSON length:', authenticationResponse.response.clientDataJSON?.length);
-      console.log('Authenticator Data length:', authenticationResponse.response.authenticatorData?.length);
       console.log('Signature length:', authenticationResponse.response.signature?.length);
       console.log('--- END DIAGNOSIS ---');
 

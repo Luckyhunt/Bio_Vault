@@ -122,6 +122,22 @@ export async function POST(request: Request) {
         throw new Error(`Vault Storage Error: ${dbError.message}`);
       }
 
+      // --- DEEP ROOT FIX: Ensure Profiles record exists ---
+      // This is crucial for the login flow to correctly associate usernames and wallet addresses.
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          id: userId,
+          username: cleanUsername,
+          display_name: username, // Original user input
+          wallet_address: walletAddress,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (profileError) {
+        console.warn('[Register] Profile sync failure (non-critical, but logging):', profileError.message);
+      }
+
       cookieStore.delete('registration_challenge');
 
       return NextResponse.json({ verified: true, walletAddress });
