@@ -4,6 +4,7 @@ import { rpID } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
 
+// 🔥 UNIVERSAL BINARY ADAPTER (CRITICAL FIX)
 function toUint8ArraySafe(data: any): Uint8Array {
   if (!data) throw new Error("No data provided");
 
@@ -21,6 +22,14 @@ function toUint8ArraySafe(data: any): Uint8Array {
   }
 
   throw new Error("Unsupported binary format");
+}
+
+// 🔒 STRICT TRANSPORT SANITIZER (Prevents SimpleWebAuthn v13 Crashes)
+const VALID_TRANSPORTS = ['usb', 'nfc', 'ble', 'internal', 'hybrid'] as const;
+
+function sanitizeTransports(transports: any): any[] {
+  if (!Array.isArray(transports)) return [];
+  return transports.filter(t => VALID_TRANSPORTS.includes(t as any));
 }
 
 export async function POST(request: Request) {
@@ -80,7 +89,7 @@ export async function POST(request: Request) {
         validCredentials.push({
           id: idBuffer,
           type: 'public-key' as const,
-          transports: pk.transports || [],
+          transports: sanitizeTransports(pk.transports),
         });
 
       } catch (err: any) {
@@ -101,6 +110,7 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
+    // 🔥 SAFE WRAPPER (prevents crash)
     let options;
     try {
       options = await generateAuthenticationOptions({
@@ -112,7 +122,7 @@ export async function POST(request: Request) {
       console.error("OPTIONS GENERATION FAILED:", err);
       return NextResponse.json({
         error: 'Failed to generate auth options',
-        debug: err.message,
+        debug_hint: err.message,
       }, { status: 500 });
     }
 
@@ -131,7 +141,7 @@ export async function POST(request: Request) {
         console.error("CHALLENGE INSERT FAILED:", challengeError);
         return NextResponse.json({
           error: 'Challenge storage failed',
-          debug: challengeError.message,
+          debug_hint: challengeError.message,
         }, { status: 500 });
       }
 
@@ -139,7 +149,7 @@ export async function POST(request: Request) {
       console.error("CHALLENGE ERROR:", err);
       return NextResponse.json({
         error: 'Challenge handling failed',
-        debug: err.message,
+        debug_hint: err.message,
       }, { status: 500 });
     }
 
@@ -149,7 +159,7 @@ export async function POST(request: Request) {
     console.error("FINAL CRASH:", error);
     return NextResponse.json({
       error: 'Unable to initiate biometric login',
-      debug: error.message,
+      debug_hint: error.message,
     }, { status: 500 });
   }
 }
