@@ -3,7 +3,7 @@ import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { rpID } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
-import { fromBase64URL } from '@/lib/encoding';
+import { toUint8Array } from '@/lib/encoding';
 
 
 // 🔒 STRICT TRANSPORT SANITIZER (Prevents SimpleWebAuthn v13 Crashes)
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
         console.log("[Login Options] Final ID for browser:", pk.id);
 
         validCredentials.push({
-          id: fromBase64URL(pk.id), // Convert Base64URL string to Uint8Array for SimpleWebAuthn
+          id: toUint8Array(pk.id), // Convert Base64URL string to Uint8Array for SimpleWebAuthn
           type: 'public-key' as const,
           transports: sanitizeTransports(pk.transports),
         });
