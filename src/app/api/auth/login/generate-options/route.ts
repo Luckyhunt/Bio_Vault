@@ -66,10 +66,16 @@ export async function POST(request: Request) {
         continue;
       }
       
-      console.log("[Login Options] Final ID for browser:", pk.id);
+      let finalId = pk.id;
+      // Safe fallback if Supabase ID column is still BYTEA, which returns hex instead of raw strings
+      if (typeof pk.id === 'string' && pk.id.startsWith('\\x')) {
+        finalId = Buffer.from(pk.id.slice(2), 'hex').toString('utf8');
+      }
+
+      console.log("[Login Options] Final ID for browser:", finalId);
 
       validCredentials.push({
-        id: pk.id, // ✅ STRING DIRECT
+        id: finalId, // ✅ STRICT EXACT BASE64URL STRING
         type: 'public-key' as const,
         transports: sanitizeTransports(pk.transports),
       });

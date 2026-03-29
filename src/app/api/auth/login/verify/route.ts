@@ -77,7 +77,12 @@ export async function POST(request: Request) {
     // 4. Verify WebAuthn authentication (BEYOND STABLE: CHARACTER-PERFECT)
     let verification;
     try {
-      const publicKeyBytes = fromBase64URL(passkey.public_key);
+      let pubKeyString = passkey.public_key;
+      // Database BYTEA fallback for hex strings
+      if (typeof pubKeyString === 'string' && pubKeyString.startsWith('\\x')) {
+        pubKeyString = Buffer.from(pubKeyString.slice(2), 'hex').toString('utf8');
+      }
+      const publicKeyBytes = fromBase64URL(pubKeyString);
 
       verification = await verifyAuthenticationResponse({
         response: authenticationResponse,
@@ -85,7 +90,7 @@ export async function POST(request: Request) {
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: {
-          id: passkey.id, // ✅ CLEAN STRING PASS-THROUGH
+          id: authenticationResponse.id, // ✅ GUARANTEED BASE64URL STRING FROM BROWSER
           publicKey: publicKeyBytes as any, // ✅ RAW BYTES FOR LIBRARY
           counter: Number(passkey.counter),
         },
