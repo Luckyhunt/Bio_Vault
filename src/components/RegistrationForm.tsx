@@ -30,14 +30,21 @@ export default function RegistrationForm() {
       });
 
       const options = await optionsResp.json();
-
       if (options.error) throw new Error(options.error);
+
+      // --- REGISTER DIAGNOSTIC LOG ---
+      console.log('[Register] Options received:', options);
+      console.log('[Register] Challenge:', options.challenge);
+      // -------------------------------
 
       // 2. Trigger native OS biometric prompt
       const attestationResponse = await startRegistration({
         optionsJSON: options,
       });
 
+      console.log('[Register] Attestation Response:', attestationResponse);
+      console.log('[Register] New Credential ID:', attestationResponse.id);
+      
       setStatus('verifying');
 
       // 3. Verify on backend

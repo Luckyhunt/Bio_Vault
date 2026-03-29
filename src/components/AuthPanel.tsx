@@ -26,8 +26,16 @@ export default function AuthPanel() {
         body: JSON.stringify({ username }),
       });
       const options = await optionsResp.json();
-
       if (options.error) throw new Error(options.error);
+
+      // --- LOGIN DIAGNOSTIC LOG ---
+      console.log('[Login] Authentication Options received:', options);
+      console.log('[Login] Challenge:', options.challenge);
+      console.log('[Login] AllowCredentialsCount:', options.allowCredentials?.length);
+      if (options.allowCredentials?.[0]) {
+        console.log('[Login] First Credential ID:', options.allowCredentials[0].id);
+      }
+      // ----------------------------
 
       const authenticationResponse = await startAuthentication({ optionsJSON: options });
 

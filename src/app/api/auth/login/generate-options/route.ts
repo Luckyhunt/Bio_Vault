@@ -88,14 +88,17 @@ export async function POST(request: Request) {
 
     for (const pk of passkeys) {
       try {
-        const idBuffer = toUint8ArraySafe(pk.id);
+        const binaryId = toUint8ArraySafe(pk.id);
 
-        if (!idBuffer || idBuffer.length < 16) {
+        if (!binaryId || binaryId.length < 16) {
           throw new Error("Invalid length");
         }
 
+        const base64Id = toBase64URL(binaryId);
+        console.log("[Login Options] Final ID for browser:", base64Id);
+
         validCredentials.push({
-          id: toBase64URL(idBuffer), // 🔥 FIXED
+          id: base64Id, // 🔥 FIXED
           type: 'public-key' as const,
           transports: sanitizeTransports(pk.transports),
         });
