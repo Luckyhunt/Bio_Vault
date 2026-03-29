@@ -1,4 +1,4 @@
-import { createPublicClient, http, Hex } from 'viem';
+import { createPublicClient, http, Hex, toHex, isHex } from 'viem';
 import { polygonAmoy } from 'viem/chains';
 import {
   toCoinbaseSmartAccount,
@@ -7,6 +7,7 @@ import {
 
 import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import { createSmartAccountClient } from 'permissionless';
+import { toUint8Array } from '@/lib/encoding';
 
 // ==============================
 // 1. CONFIG
@@ -38,22 +39,18 @@ export async function getSmartAccount(
   credentialId: string,
   publicKey: string
 ) {
-  // Normalize inputs
-  const id = credentialId.startsWith('0x')
-    ? (credentialId as Hex)
-    : (`0x${credentialId}` as Hex);
+  // Normalize inputs robustly (Handles Base64, Hex, or raw)
+  const idHex = isHex(credentialId) ? credentialId : toHex(toUint8Array(credentialId));
+  const pubKeyHex = isHex(publicKey) ? publicKey : toHex(toUint8Array(publicKey));
 
-  const pubKey = publicKey.startsWith('0x')
-    ? (publicKey as Hex)
-    : (`0x${publicKey}` as Hex);
-
-  // ✅ Correct WebAuthn account (Type-Safe Alignment)
+  // ✅ Correct WebAuthn account (Type-Safe Normalization)
   const webAuthnAccount = toWebAuthnAccount({
     credential: {
-      id,
-      publicKey: pubKey,
+      id: idHex,
+      publicKey: pubKeyHex,
     },
   });
+
 
   // ✅ Coinbase Smart Account (Restored Versioning)
   const account = await toCoinbaseSmartAccount({
