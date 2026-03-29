@@ -80,7 +80,9 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
                       </div>
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-white/80">Device Identifier</span>
-                        <code className="text-[10px] text-white/40 font-mono tracking-tight">{pk.id.slice(0, 16)}...</code>
+                        <code className="text-[10px] text-white/40 font-mono tracking-tight">
+                          {pk.id.startsWith('\\x') ? pk.id.slice(2, 18) : pk.id.slice(0, 16)}...
+                        </code>
                       </div>
                     </div>
                     <button 

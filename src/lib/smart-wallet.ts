@@ -34,11 +34,15 @@ export const bundlerClient = createPimlicoClient({
  * @param publicKeyHex The hex-encoded public key bytes
  */
 export async function createPasskeySmartAccountClient(passkeyId: string, publicKeyHex: Hex) {
+  // Normalize IDs from Supabase/Postgres BYTEA prefixes (\x -> 0x)
+  const cleanId = passkeyId.startsWith('\\x') ? `0x${passkeyId.slice(2)}` as Hex : passkeyId;
+  const cleanPublicKey = publicKeyHex.startsWith('\\x') ? `0x${publicKeyHex.slice(2)}` as Hex : publicKeyHex;
+
   // 1. Create the WebAuthn Signer natively with viem
   const webAuthnAccount = toWebAuthnAccount({
     credential: {
-      id: passkeyId,
-      publicKey: publicKeyHex,
+      id: cleanId,
+      publicKey: cleanPublicKey,
     },
   });
 
