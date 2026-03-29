@@ -3,17 +3,8 @@ import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { rpID } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
-import { toUint8Array } from '@/lib/encoding';
+import { toUint8Array, toBase64URL } from '@/lib/encoding';
 
-
-
-function toBase64URL(buffer: Uint8Array) {
-  return Buffer.from(buffer)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
 
 // 🔒 STRICT TRANSPORT SANITIZER (Prevents SimpleWebAuthn v13 Crashes)
 const VALID_TRANSPORTS = ['usb', 'nfc', 'ble', 'internal', 'hybrid'] as const;

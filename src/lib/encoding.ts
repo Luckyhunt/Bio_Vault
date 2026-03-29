@@ -40,25 +40,27 @@ export function toUint8Array(data: any): Uint8Array {
     return new Uint8Array(data.data);
   }
 
-  // Case 4: String handling (Hex or Base64)
+  // Case 4: String handling (Hex, Base64, or Base64URL)
   if (typeof data === "string") {
     // 4a. Supabase/Postgres Hex format (\x7b or x7b)
     if (data.startsWith('\\x') || data.startsWith('x')) {
       const hex = data.startsWith('\\x') ? data.slice(2) : data.slice(1);
       const decoded = Buffer.from(hex, 'hex');
       
-      // RECURSIVE CHECK: Sometime Hex-decoding results in a JSON string (Meta-encoding)
       try {
         const str = decoded.toString('utf8');
-        if (str.startsWith('{')) {
-          return toUint8Array(JSON.parse(str));
-        }
-      } catch { /* Not a JSON string after Hex decode */ }
+        if (str.startsWith('{')) return toUint8Array(JSON.parse(str));
+      } catch { /* Not JSON */ }
       
       return new Uint8Array(decoded);
     }
 
-    // 4b. Base64 Handling (SimpleWebAuthn default)
+    // 4b. Base64URL Handling (Robust Detection)
+    if (data.includes('-') || data.includes('_')) {
+      return fromBase64URL(data);
+    }
+
+    // 4c. Standard Base64 Handling
     return Uint8Array.from(Buffer.from(data, "base64"));
   }
 
