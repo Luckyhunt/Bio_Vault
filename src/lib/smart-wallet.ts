@@ -39,17 +39,24 @@ export async function getSmartAccount(
   credentialId: string,
   publicKey: string
 ) {
-  // Normalize inputs robustly (Handles Base64, Hex, or raw)
+  // Normalize inputs robustly (Handles PKCS Hex Standard)
   const idHex = isHex(credentialId) ? credentialId : toHex(toUint8Array(credentialId));
   const pubKeyHex = isHex(publicKey) ? publicKey : toHex(toUint8Array(publicKey));
 
-  // ✅ Correct WebAuthn account (Type-Safe Normalization)
+  console.log('[SmartWallet] Identity Sync:', {
+    id: idHex,
+    pubKey: pubKeyHex,
+    length: pubKeyHex.length
+  });
+
+  // ✅ Correct WebAuthn account (Direct PKCS Hex Mapping)
   const webAuthnAccount = toWebAuthnAccount({
     credential: {
       id: idHex,
       publicKey: pubKeyHex,
     },
   });
+
 
 
   // ✅ Coinbase Smart Account (Restored Versioning)

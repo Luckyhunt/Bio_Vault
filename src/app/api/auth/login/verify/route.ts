@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
-import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
-import { fromBase64URL, toUint8Array, toBase64URL } from '@/lib/encoding';
+import { hexToBytes } from 'viem';
 
 export async function POST(request: Request) {
   const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,44 +24,32 @@ export async function POST(request: Request) {
 
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    // 1. SECURITY: Login Rate Limiting (Brute-Force Protection)
-    const { count: recentAttempts } = await db
-      .from('challenges')
-      .select('*', { count: 'exact', head: true })
-      .eq('type', 'authentication')
-      .gt('created_at', new Date(Date.now() - 60000).toISOString()); // Last 60s
-
-    if (recentAttempts && recentAttempts > 5) {
-      return NextResponse.json({ error: 'Too many login attempts. Please wait 60 seconds.' }, { status: 429 });
-    }
-
-    // 2. Fetch and consume one-time challenge from DB
-    const { data: challengeData, error: challengeFetchError } = await db
+    const { data: challengeData } = await db
       .from('challenges')
       .select('*')
       .eq('challenge', challenge)
       .eq('type', 'authentication')
       .single();
 
-    if (challengeFetchError || !challengeData) {
-      console.warn('[Login] Invalid or missing challenge');
+    if (!challengeData) {
       return NextResponse.json({ error: 'Handshake invalid. Please try again.' }, { status: 401 });
     }
 
-    // 3. Find the passkey by string ID
-    const stringId = authenticationResponse.id;
-    const { data: passkey, error: pkError } = await db
+    if (new Date(challengeData.expires_at) < new Date()) {
+      await db.from('challenges').delete().eq('id', challengeData.id);
+      return NextResponse.json({ error: 'Handshake expired. Please retry.' }, { status: 401 });
+    }
+
+    const { data: passkey } = await db
       .from('passkeys')
       .select('id, public_key, counter, user_id')
-      .eq('id', stringId)
+      .eq('id', authenticationResponse.id)
       .single();
 
-    if (pkError || !passkey) {
-      console.error('[Login] Passkey not found for string ID');
+    if (!passkey) {
       return NextResponse.json({ error: 'Biometric key not recognized.' }, { status: 404 });
     }
 
-    // 4. Verify profile link
     const { data: profile } = await db
       .from('profiles')
       .select('id, username, wallet_address')
@@ -70,18 +57,13 @@ export async function POST(request: Request) {
       .single();
 
     if (!profile || profile.username !== cleanUsername) {
-      return NextResponse.json({ error: 'Username does not match registered key' }, { status: 401 });
+      return NextResponse.json({ error: 'Username mismatch' }, { status: 401 });
     }
 
-    // 5. Verify WebAuthn authentication
     let verification;
+
     try {
-      let pubKeyString = passkey.public_key;
-      // Handle legacy BYTEA fallback if needed
-      if (typeof pubKeyString === 'string' && pubKeyString.startsWith('\\x')) {
-        pubKeyString = Buffer.from(pubKeyString.slice(2), 'hex').toString('utf8');
-      }
-      const publicKeyBytes = fromBase64URL(pubKeyString);
+      const publicKeyBytes = hexToBytes(passkey.public_key);
 
       verification = await verifyAuthenticationResponse({
         response: authenticationResponse,
@@ -89,61 +71,61 @@ export async function POST(request: Request) {
         expectedOrigin: origin,
         expectedRPID: rpID,
         credential: {
-          id: authenticationResponse.id,
-          publicKey: publicKeyBytes as any,
+          id: passkey.id,
+          publicKey: publicKeyBytes as unknown as Uint8Array<ArrayBuffer>,
           counter: Number(passkey.counter),
         },
-        requireUserVerification: false,
+        requireUserVerification: true,
       });
-    } catch (vErr: any) {
-      console.error('[Login] WebAuthn verify failed:', vErr.message);
-      return NextResponse.json({ 
-        error: 'Biometric verification failed', 
-        debug_hint: `Handshake Error: ${vErr.message}` 
+    } catch (err: any) {
+      return NextResponse.json({
+        error: 'Biometric verification failed',
+        debug_hint: err.message,
       }, { status: 400 });
     }
 
-    // 6. ONE-TIME USE: Consume challenge immediately
     await db.from('challenges').delete().eq('id', challengeData.id);
 
-    if (verification.verified && verification.authenticationInfo) {
-      const { newCounter } = verification.authenticationInfo;
-
-      // Anti-Replay Protection
-      if (newCounter > 0 && newCounter <= Number(passkey.counter)) {
-        console.error('[Login] SECURITY ALERT: Counter regression!');
-        return NextResponse.json({ error: 'Security violation: Probable cloned authenticator.' }, { status: 403 });
-      }
-
-      // Update counter & last used
-      await db
-        .from('passkeys')
-        .update({ counter: newCounter, last_used_at: new Date().toISOString() })
-        .eq('id', passkey.id);
-
-      // Create session via Magic Link
-      const email = `${cleanUsername}@biovault.local`;
-      const { data: linkData, error: linkError } = await db.auth.admin.generateLink({
-        type: 'magiclink',
-        email,
-        options: { redirectTo: `${origin}/dashboard` }
-      });
-
-      if (linkError) throw new Error(`Auth Session Error: ${linkError.message}`);
-
-      return NextResponse.json({ 
-        verified: true,
-        walletAddress: profile.wallet_address,
-        redirectUrl: linkData.properties.action_link 
-      });
-    } else {
+    if (!verification.verified || !verification.authenticationInfo) {
       return NextResponse.json({ error: 'Biometric verification returned false' }, { status: 401 });
     }
+
+    const { newCounter } = verification.authenticationInfo;
+
+    if (newCounter > 0 && newCounter <= Number(passkey.counter)) {
+      return NextResponse.json({ error: 'Security violation detected' }, { status: 403 });
+    }
+
+    await db
+      .from('passkeys')
+      .update({
+        counter: newCounter,
+        last_used_at: new Date().toISOString(),
+      })
+      .eq('id', passkey.id);
+
+    const email = `${cleanUsername}@biovault.local`;
+
+    const { data: linkData, error: linkError } = await db.auth.admin.generateLink({
+      type: 'magiclink',
+      email,
+      options: { redirectTo: `${origin}/dashboard` },
+    });
+
+    if (linkError) {
+      throw new Error(linkError.message);
+    }
+
+    return NextResponse.json({
+      verified: true,
+      walletAddress: profile.wallet_address,
+      redirectUrl: linkData.properties.action_link,
+    });
+
   } catch (err: any) {
-    console.error('CRITICAL: Login failure:', err.message);
-    return NextResponse.json({ 
-      error: 'Unable to verify biometric login', 
-      debug_hint: `Stack: ${err.name} - ${err.message}` 
+    return NextResponse.json({
+      error: 'Unable to verify biometric login',
+      debug_hint: err.message,
     }, { status: 500 });
   }
 }

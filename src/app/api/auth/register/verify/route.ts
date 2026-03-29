@@ -4,7 +4,10 @@ import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { toBase64URL, toUint8Array } from '@/lib/encoding';
+import { convertCOSEtoPKCS } from '@simplewebauthn/server/helpers';
 import { getSmartAccount } from '@/lib/smart-wallet';
+
+
 import { supabaseAdmin as adminClient } from '@/lib/supabase-admin';
 
 export async function POST(request: Request) {
@@ -73,75 +76,88 @@ export async function POST(request: Request) {
     // 4. ONE-TIME USE: Consume challenge immediately
     await db.from('challenges').delete().eq('id', challengeData.id);
 
-    if (verification.verified && verification.registrationInfo) {
-      const { credential } = verification.registrationInfo;
-      const { id: credentialID, publicKey: credentialPublicKey, counter } = credential;
+      if (verification.verified && verification.registrationInfo) {
+        const { credential } = verification.registrationInfo;
+        const { id: credentialID, publicKey: credentialPublicKey, counter } = credential;
 
-      const email = `${cleanUsername}@biovault.local`;
+        // ✅ ARCHITECTURAL FIX: Extract RAW SECP256R1 Public Key (PKCS Format)
+        // This is the CRITICAL STEP for Coinbase Smart Account factory
+        const rawPKCS = convertCOSEtoPKCS(credentialPublicKey);
 
-      // 5. DIAGNOSTIC BLOCK: Deterministic Smart Account Address
-      let walletAddress: string;
-      try {
-        console.log('[Register] Deriving Smart Account Address...');
-        const smartAccount = await getSmartAccount(
-          attestationResponse.id, 
-          toBase64URL(credentialPublicKey) // Fixed: Removed redundant toUint8Array
-        );
-        walletAddress = smartAccount.address;
-      } catch (derivationErr: any) {
-        console.error('[Register] Identity Derivation Failed:', derivationErr.message);
-        return NextResponse.json({ 
-          error: 'Identity derivation failure', 
-          debug_hint: `Derivation Error: ${derivationErr.message}` 
-        }, { status: 500 });
-      }
+        const publicKeyHex = `0x${Buffer.from(rawPKCS).toString('hex')}`;
 
-      // 6. DB SYNC: Auth & Profile Management
-      const { data: existingAuthUsers } = await db.auth.admin.listUsers();
-      const orphanUser = existingAuthUsers?.users?.find((u: any) => u.email === email);
-
-      let userId: string;
-
-      if (orphanUser) {
-        await db.auth.admin.updateUserById(orphanUser.id, {
-          user_metadata: { username: cleanUsername, wallet_address: walletAddress },
-        });
-        userId = orphanUser.id;
-      } else {
-        const { data: authUser, error: authError } = await db.auth.admin.createUser({
-          email,
-          password: Math.random().toString(36).slice(-16),
-          user_metadata: { username: cleanUsername, wallet_address: walletAddress },
-          email_confirm: true,
+        console.log('[Register] Identity Map:', {
+          id: attestationResponse.id,
+          pkcs_key: publicKeyHex,
+          length: publicKeyHex.length
         });
 
-        if (authError) throw new Error(`Supabase Auth Error: ${authError.message}`);
-        userId = authUser.user.id;
-      }
+        const email = `${cleanUsername}@biovault.local`;
 
-      // 7. Passkey Persistence
-      const { error: dbError } = await db
-        .from('passkeys')
-        .insert({
-          id: attestationResponse.id, 
-          user_id: userId,
-          public_key: toBase64URL(credentialPublicKey), 
-          counter,
-          credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
-          transports: attestationResponse.response.transports || [],
+        // 5. DIAGNOSTIC BLOCK: Deterministic Smart Account Address
+        let walletAddress: string;
+        try {
+          console.log('[Register] Deriving Smart Account Address...');
+          const smartAccount = await getSmartAccount(
+            attestationResponse.id, 
+            publicKeyHex // Standardized Hex
+          );
+          walletAddress = smartAccount.address;
+        } catch (derivationErr: any) {
+          console.error('[Register] Identity Derivation Failed:', derivationErr.message);
+          return NextResponse.json({ 
+            error: 'Identity derivation failure', 
+            debug_hint: `Derivation Error: ${derivationErr.message}` 
+          }, { status: 500 });
+        }
+
+        // 6. DB SYNC: Auth & Profile Management
+        const { data: existingAuthUsers } = await db.auth.admin.listUsers();
+        const orphanUser = existingAuthUsers?.users?.find((u: any) => u.email === email);
+
+        let userId: string;
+
+        if (orphanUser) {
+          await db.auth.admin.updateUserById(orphanUser.id, {
+            user_metadata: { username: cleanUsername, wallet_address: walletAddress },
+          });
+          userId = orphanUser.id;
+        } else {
+          const { data: authUser, error: authError } = await db.auth.admin.createUser({
+            email,
+            password: Math.random().toString(36).slice(-16),
+            user_metadata: { username: cleanUsername, wallet_address: walletAddress },
+            email_confirm: true,
+          });
+
+          if (authError) throw new Error(`Supabase Auth Error: ${authError.message}`);
+          userId = authUser.user.id;
+        }
+
+        // 7. Passkey Persistence
+        const { error: dbError } = await db
+          .from('passkeys')
+          .insert({
+            id: attestationResponse.id, 
+            user_id: userId,
+            public_key: publicKeyHex, // Store raw PKCS Hex
+            counter,
+            credential_device_type: verification.registrationInfo.credentialDeviceType || 'singleDevice',
+            transports: attestationResponse.response.transports || [],
+          });
+
+
+        if (dbError) throw new Error(`Vault DB Error: ${dbError.message}`);
+
+        // 8. Profile Update
+        await db.from('profiles').upsert({
+          id: userId,
+          username: cleanUsername,
+          display_name: username,
+          wallet_address: walletAddress,
+          updated_at: new Date().toISOString(),
         });
 
-
-      if (dbError) throw new Error(`Vault DB Error: ${dbError.message}`);
-
-      // 8. Profile Update
-      await db.from('profiles').upsert({
-        id: userId,
-        username: cleanUsername,
-        display_name: username,
-        wallet_address: walletAddress,
-        updated_at: new Date().toISOString(),
-      });
 
       return NextResponse.json({ verified: true, walletAddress });
     }
