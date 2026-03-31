@@ -10,11 +10,12 @@ import Image from 'next/image';
 import { Hex } from 'viem';
 import { supabase } from '@/lib/supabase';
 import { createPasskeySmartAccountClient } from '@/lib/smart-wallet';
+import { useWallet } from '@/context/WalletContext';
 import SwapModal from '@/components/SwapModal';
 import PasskeyModal from '@/components/PasskeyModal';
 
 export default function Dashboard({ user }: { user: any }) {
-  const [balance, setBalance] = useState('0.15'); // Mocked balance for UI
+  const { balance, client, isDeployed, address: contextAddress, connect, isConnecting } = useWallet();
   const [isSending, setIsSending] = useState(false);
   const [address, setAddress] = useState('0x...');
   const [passkey, setPasskey] = useState<any>(null);
@@ -39,6 +40,7 @@ export default function Dashboard({ user }: { user: any }) {
 
       const pk = passkeys[0];
       setPasskey(pk);
+      await connect(pk.id, pk.public_key);
       const addr = user?.user_metadata?.wallet_address || '0x...';
       setAddress(addr);
 
@@ -49,26 +51,18 @@ export default function Dashboard({ user }: { user: any }) {
   }, [user]);
 
   const handleSend = async () => {
-    if (!passkey || isSending) return;
+    if (!client || isSending) return;
     
     setIsSending(true);
     try {
-      console.log('[Dashboard] Initializing Passkey Client...');
-      const { client, isDeployed } = await createPasskeySmartAccountClient(
-        passkey.id, 
-        passkey.public_key
-      );
-
       console.log('[Dashboard] Account State:', isDeployed ? 'Active' : 'Deploying on-chain...');
 
       console.log('[Dashboard] Signing Transaction...');
-      // ARCHITECTURAL FIX: Force high gas limits for the first-time deployment simulation
+      // Formulate a zero-value transaction or test transfer
       const hash = await (client as any).sendTransaction({
         to: client.account.address,
         value: BigInt(0),
         data: '0x',
-        verificationGasLimit: BigInt(1500000), // High limit for P-256 + Factory
-        preVerificationGas: BigInt(100000),
       });
 
 
