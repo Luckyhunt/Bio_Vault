@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Wallet, Send, RefreshCw, History, CreditCard, Fingerprint,
   Info, ChevronRight, ExternalLink, AlertCircle, Loader2, CheckCircle2, Wifi, WifiOff,
-  Copy, ShieldCheck, Zap, ArrowUpRight, ArrowDownLeft, Settings, LogOut
+  Globe, Copy, ShieldCheck, Zap, ArrowUpRight, ArrowDownLeft, Settings, LogOut
 } from 'lucide-react';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
