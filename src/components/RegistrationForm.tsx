@@ -5,6 +5,7 @@ import { startRegistration } from '@simplewebauthn/browser';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Fingerprint, CheckCircle2, AlertCircle, Loader2, Shield, Zap, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export default function RegistrationForm() {
   const [username, setUsername] = useState('');
@@ -51,7 +52,14 @@ export default function RegistrationForm() {
 
       if (verification.verified) {
         setStatus('success');
-        setTimeout(() => {
+        setTimeout(async () => {
+          if (verification.sessionConfig) {
+            // Establish session silently before redirecting
+            await supabase.auth.signInWithPassword({
+              email: verification.sessionConfig.email,
+              password: verification.sessionConfig.password,
+            });
+          }
           router.push('/dashboard');
         }, 2000);
       } else {

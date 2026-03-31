@@ -5,6 +5,8 @@ import { startAuthentication } from '@simplewebauthn/browser';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Fingerprint, LogIn, UserPlus, Loader2, AlertCircle, WifiOff, ShieldCheck } from 'lucide-react';
 import RegistrationForm from './RegistrationForm';
+import { supabase } from '@/lib/supabase';
+
 
 // ─── Error Mapper ─────────────────────────────────────────────────────────────
 
@@ -86,11 +88,15 @@ export default function AuthPanel() {
         throw new Error(verification.error || `Verification failed (${verifyResp.status})`);
       }
 
-      if (verification.redirectUrl) {
-        window.location.href = verification.redirectUrl;
-      } else {
-        window.location.href = '/dashboard';
+      if (verification.sessionConfig) {
+        const { error: sessionErr } = await supabase.auth.signInWithPassword({
+          email: verification.sessionConfig.email,
+          password: verification.sessionConfig.password,
+        });
+        if (sessionErr) throw new Error('Session establishment failed');
       }
+
+      window.location.href = '/dashboard';
 
     } catch (err: any) {
       const friendly = mapLoginError(err);

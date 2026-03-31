@@ -3,6 +3,7 @@ import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
 import { toUint8Array } from '@/lib/encoding';
+import crypto from 'crypto';
 
 // ─── Route ──────────────────────────────────────────────────────────────────
 
@@ -82,14 +83,24 @@ export async function POST(request: Request) {
     // 5. Run SimpleWebAuthn assertion verification
     let verification;
     try {
+      // ✅ Normalizing origin: remove trailing slash for strict match logic
+      const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+
+      console.log('[Login/Verify] Running verification with:', {
+        rpID,
+        origin: normalizedOrigin,
+        challenge: challengeData.challenge,
+        bytes: publicKeyBytes.length
+      });
+
       verification = await verifyAuthenticationResponse({
         response: authenticationResponse,
         expectedChallenge: challengeData.challenge,
-        expectedOrigin: origin,
+        expectedOrigin: normalizedOrigin,
         expectedRPID: rpID,
         credential: {
           id: passkey.id,
-          publicKey: publicKeyBytes as any,   // ← COSE bytes, as expected by the library
+          publicKey: publicKeyBytes as any,
           counter: Number(passkey.counter),
         },
         requireUserVerification: true,
@@ -98,7 +109,7 @@ export async function POST(request: Request) {
       console.error('[Login/Verify] SimpleWebAuthn assertion error:', err.message);
       return NextResponse.json({
         error: 'Biometric verification failed',
-        debug_hint: err.message,
+        debug_hint: `Verification Error: ${err.message}`, // Detailed debug info
       }, { status: 400 });
     }
 
@@ -129,27 +140,23 @@ export async function POST(request: Request) {
       })
       .eq('id', passkey.id);
 
-    // 9. Generate a magic link for Supabase session creation
-    const email = `${cleanUsername}@biovault.local`;
-
-    const { data: linkData, error: linkError } = await db.auth.admin.generateLink({
-      type: 'magiclink',
-      email,
-      options: { redirectTo: `${origin}/dashboard` },
+    // 9. ✅ GLITCH-FREE SESSION INIT: Rotate password to a secure random token
+    // This allows the frontend to establish a session silently without any redirect flashes.
+    const sessionToken = crypto.randomUUID() + crypto.randomUUID();
+    
+    await db.auth.admin.updateUserById(passkey.user_id, {
+      password: sessionToken
     });
 
-    if (linkError) {
-      console.error('[Login/Verify] Magic link generation failed:', linkError.message);
-      throw new Error(linkError.message);
-    }
+    const email = `${cleanUsername}@biovault.local`;
 
-    console.log('[Login/Verify] ✅ Login successful for:', cleanUsername, '| wallet:', profile.wallet_address);
+    console.log('[Login/Verify] ✅ Login verification successful for:', cleanUsername);
 
     return NextResponse.json({
       verified: true,
       walletAddress: profile.wallet_address,
       credentialId: passkey.id,
-      redirectUrl: linkData.properties.action_link,
+      sessionConfig: { email, password: sessionToken }
     });
 
   } catch (err: any) {

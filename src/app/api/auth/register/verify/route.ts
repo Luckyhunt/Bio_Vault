@@ -4,6 +4,7 @@ import { rpID, origin } from '@/lib/webauthn';
 import { cookies } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import { toBase64URL, toUint8Array } from '@/lib/encoding';
+import crypto from 'crypto';
 import { convertCOSEtoPKCS } from '@simplewebauthn/server/helpers';
 import { getSmartAccount } from '@/lib/smart-wallet';
 
@@ -58,10 +59,13 @@ export async function POST(request: Request) {
     // 3. Verify WebAuthn attestation (STRICT MODE)
     let verification;
     try {
+      // ✅ Normalizing origin: remove trailing slash for strict match logic
+      const normalizedOrigin = origin.endsWith('/') ? origin.slice(0, -1) : origin;
+
       verification = await verifyRegistrationResponse({
         response: attestationResponse,
         expectedChallenge: challengeData.challenge,
-        expectedOrigin: origin,
+        expectedOrigin: normalizedOrigin,
         expectedRPID: rpID,
         requireUserVerification: true,
       });
@@ -69,10 +73,10 @@ export async function POST(request: Request) {
       console.error('[Register] WebAuthn Lib Error:', vError.message);
       return NextResponse.json({ 
         error: 'Biometric handshake failed', 
-        debug_hint: vError.message 
+        debug_hint: `Verification Error: ${vError.message}` 
       }, { status: 400 });
     }
-
+    
     // 4. ONE-TIME USE: Consume challenge immediately
     await db.from('challenges').delete().eq('id', challengeData.id);
 
@@ -117,15 +121,19 @@ export async function POST(request: Request) {
 
         let userId: string;
 
+        // 9. ✅ GLITCH-FREE SESSION INIT: Create/Update user with a secure random token
+        const sessionToken = crypto.randomUUID() + crypto.randomUUID();
+        
         if (orphanUser) {
           await db.auth.admin.updateUserById(orphanUser.id, {
+            password: sessionToken,
             user_metadata: { username: cleanUsername, wallet_address: walletAddress },
           });
           userId = orphanUser.id;
         } else {
           const { data: authUser, error: authError } = await db.auth.admin.createUser({
             email,
-            password: Math.random().toString(36).slice(-16),
+            password: sessionToken,
             user_metadata: { username: cleanUsername, wallet_address: walletAddress },
             email_confirm: true,
           });
@@ -158,8 +166,13 @@ export async function POST(request: Request) {
           updated_at: new Date().toISOString(),
         });
 
+        console.log('[Register/Verify] ✅ Vault initialized for:', cleanUsername);
 
-      return NextResponse.json({ verified: true, walletAddress });
+      return NextResponse.json({ 
+        verified: true, 
+        walletAddress,
+        sessionConfig: { email, password: sessionToken }
+      });
     }
 
     return NextResponse.json({ error: 'Biometric verification returned false' }, { status: 403 });
