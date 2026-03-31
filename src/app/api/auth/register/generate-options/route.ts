@@ -45,7 +45,6 @@ export async function POST(request: Request) {
       .insert({
         challenge: options.challenge,
         type: 'registration',
-        user_id_hint: username,
         expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(), // 5 minutes
       });
 

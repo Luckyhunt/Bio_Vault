@@ -116,7 +116,6 @@ export async function POST(request: Request) {
         .insert({
           challenge: options.challenge,
           type: 'authentication',
-          user_id_hint: cleanUsername,
           expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(),
         });
 
