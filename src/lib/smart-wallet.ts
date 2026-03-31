@@ -11,6 +11,38 @@ import { toUint8Array } from '@/lib/encoding';
 import { getPKCSFromCOSE } from '@/lib/webauthn-utils';
 
 // ==============================
+// 0. TYPES & ERRORS
+// ==============================
+
+export interface AAError {
+  aaCode: string;      // e.g., 'AA13', 'AA21'
+  rawMessage: string;
+  returnData?: string;
+  phase: 'sim' | 'exec';
+  debugHint?: string;
+}
+
+/**
+ * Normalizes cryptic bundler errors into a shared diagnostic shape.
+ */
+export function parseAAError(err: any, phase: 'sim' | 'exec' = 'exec'): AAError {
+  const msg = err?.message || 'Unknown AA Error';
+  const data = err?.data || err?.details || '';
+
+  // Extract AAxx code using regex
+  const codeMatch = msg.match(/AA\d{2}/);
+  const aaCode = codeMatch ? codeMatch[0] : 'AA00';
+
+  return {
+    aaCode,
+    rawMessage: msg,
+    returnData: data,
+    phase,
+    debugHint: `Phase: ${phase} | Code: ${aaCode} | Details: ${data.slice(0, 100)}`
+  };
+}
+
+// ==============================
 // 1. CONFIG
 // ==============================
 
@@ -42,7 +74,7 @@ export async function getSmartAccount(
 ) {
   // Normalize inputs robustly (Handles COSE -> PKCS Conversion)
   const idHex = isHex(credentialId) ? credentialId : toHex(toUint8Array(credentialId));
-  
+
   // If the publicKey is a COSE blob (from our new DB standard), convert it to PKCS
   // COSE keys are typically much longer than 65-byte PKCS keys.
   let pubKeyHex: Hex;
@@ -105,7 +137,7 @@ export async function createPasskeySmartAccountClient(
     paymaster: bundlerClient,
 
     userOperation: {
-      // ✅ Proper gas config
+      // ✅ Defensive gas tuning (fixes AA13 initCode OOG)
       estimateFeesPerGas: async () => {
         const gas = await bundlerClient.getUserOperationGasPrice();
         return gas.fast;

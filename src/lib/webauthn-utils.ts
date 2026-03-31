@@ -18,8 +18,13 @@ export function getPKCSFromCOSE(coseHex: string): `0x${string}` {
     throw new Error('Invalid COSE Public Key: Missing x or y coordinates.');
   }
 
-  // Prefix with 0x04 for uncompressed PKCS format (65 bytes)
-  return `0x04${Buffer.from(x).toString('hex')}${Buffer.from(y).toString('hex')}`;
+  // ✅ CRITICAL FIX: Ensure x and y are strictly padded to 32 bytes (64 hex chars)
+  // SECP256R1 (P-256) verifiers expect 32-byte coordinates.
+  const xHex = Buffer.from(x).toString('hex').padStart(64, '0');
+  const yHex = Buffer.from(y).toString('hex').padStart(64, '0');
+
+  // Prefix with 0x04 for uncompressed PKCS format (65 bytes total)
+  return `0x04${xHex}${yHex}`;
 }
 
 // Keep the old name as an alias for backward compatibility if needed, 

@@ -2,32 +2,32 @@
 @source "../../src";
 
 :root {
-  --background: #050505;
+  --background: #000000;
   --foreground: #ffffff;
   
-  /* Brand Accents */
-  --accent-primary: #6366f1; /* Indigo 500 */
-  --accent-primary-glow: rgba(99, 102, 241, 0.5);
+  /* Brand Accents (Monochromatic) */
+  --accent-primary: #ffffff; 
+  --accent-primary-glow: rgba(255, 255, 255, 0.2);
   
-  --accent-secondary: #06b6d4; /* Cyan 500 */
-  --accent-secondary-glow: rgba(6, 182, 212, 0.5);
+  --accent-secondary: #aaaaaa; 
+  --accent-secondary-glow: rgba(170, 170, 170, 0.2);
   
-  --accent-secure: #10b981; /* Emerald 500 */
-  --accent-secure-glow: rgba(16, 185, 129, 0.5);
+  --accent-secure: #ffffff; 
+  --accent-secure-glow: rgba(255, 255, 255, 0.3);
 
   /* Glassmorphism Tokens */
-  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-bg: rgba(255, 255, 255, 0.02);
   --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-blur: 12px;
+  --glass-blur: 8px; /* Reduced for performance */
 
   /* Animation Timings */
-  --transition-luxurious: 450ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-luxurious: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-snappy: 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @layer base {
   body {
-    @apply text-white bg-[#050505] antialiased;
+    @apply text-white bg-black antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "ss01";
   }
 }
@@ -40,22 +40,21 @@
   }
 
   .glass-card:hover {
-    @apply border-white/20 bg-white/[0.05];
-    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    @apply border-white/20 bg-white/[0.04];
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.05);
   }
 
   .btn-primary {
-    @apply relative overflow-hidden px-8 py-4 rounded-2xl font-bold transition-all duration-150 active:scale-95 text-white;
-    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    @apply relative overflow-hidden px-8 py-4 rounded-2xl font-bold transition-all duration-150 active:scale-95 text-black bg-white;
     box-shadow: 0 4px 15px var(--accent-primary-glow);
   }
 
   .btn-primary:hover {
-    @apply scale-[1.02] brightness-110 shadow-[0_8px_25px_var(--accent-primary-glow)];
+    @apply scale-[1.02] brightness-90 shadow-[0_8px_25px_var(--accent-primary-glow)];
   }
 
   .neon-pulse {
-    animation: neon-pulse 2s infinite;
+    animation: neon-pulse 3s infinite ease-in-out;
   }
 
   @keyframes neon-pulse {

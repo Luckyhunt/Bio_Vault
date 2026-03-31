@@ -15,6 +15,14 @@ import PasskeyModal from '@/components/PasskeyModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface TransactionIntent {
+  kind: 'transfer' | 'swap' | 'contract_call';
+  to: string;
+  value: bigint;
+  data: string;
+  label: string;
+}
+
 interface TxRecord {
   hash: string;
   from: string;
@@ -62,6 +70,7 @@ export default function Dashboard({ user }: { user: any }) {
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [lastTxHash, setLastTxHash] = useState<string | null>(null);
+  const [transactionState, setTransactionState] = useState<'idle' | 'queued' | 'validating' | 'mined' | 'failed'>('idle');
   const [transactions, setTransactions] = useState<TxRecord[]>([]);
   const [showSwap, setShowSwap] = useState(false);
   const [showPasskeys, setShowPasskeys] = useState(false);
@@ -94,20 +103,27 @@ export default function Dashboard({ user }: { user: any }) {
       .catch(e => console.warn('[Dashboard] Explorer fetch failed:', e.message));
   }, [walletAddress]);
 
-  // ── Send ────────────────────────────────────────────────────────────────────
-  const handleSend = useCallback(async () => {
+  // ── Send / Unified Intent Path ──────────────────────────────────────────────
+  const handleSend = useCallback(async (intent?: TransactionIntent) => {
     if (!client || isSending) return;
     setSendError(null);
     setLastTxHash(null);
     setIsSending(true);
+    setTransactionState('queued');
 
     try {
+      setTransactionState('validating');
+      const targetTo = intent?.to || walletAddress as `0x${string}`;
+      const targetValue = intent?.value || BigInt(0);
+      const targetData = (intent?.data as `0x${string}`) || '0x';
+
       const hash = await (client as any).sendTransaction({
-        to: walletAddress as `0x${string}`,
-        value: BigInt(0),
-        data: '0x' as `0x${string}`,
+        to: targetTo,
+        value: targetValue,
+        data: targetData,
       });
 
+      setTransactionState('mined');
       setLastTxHash(hash);
       if (walletAddress) {
         import('@/lib/explorer')
@@ -116,6 +132,7 @@ export default function Dashboard({ user }: { user: any }) {
           .catch(() => {});
       }
     } catch (err: any) {
+      setTransactionState('failed');
       setSendError(mapAAError(err?.message || 'Transaction failed'));
     } finally {
       setIsSending(false);
@@ -146,7 +163,7 @@ export default function Dashboard({ user }: { user: any }) {
           >
             <h1 className="text-4xl font-outfit font-black tracking-tight flex items-center gap-3">
               Vault Dashboard
-              <span className="text-emerald-400 p-1.5 rounded-xl bg-emerald-400/10 border border-emerald-400/20">
+              <span className="text-white p-1.5 rounded-xl bg-white/10 border border-white/20">
                 <ShieldCheck className="w-5 h-5" />
               </span>
             </h1>
@@ -165,14 +182,14 @@ export default function Dashboard({ user }: { user: any }) {
 
           <div className="flex items-center gap-4">
              <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/[0.03] border border-white/5">
-                <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]' : 'bg-rose-400'}`} />
+                <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'bg-white/20'}`} />
                 <span className="text-[10px] font-black uppercase tracking-widest text-white/50">
                   {status === 'connected' ? (isDeployed ? 'On-Chain' : 'Counterfactual') : 'Disconnected'}
                 </span>
              </div>
              <button 
               onClick={disconnect}
-              className="p-2.5 rounded-2xl bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all border border-rose-500/20"
+              className="p-2.5 rounded-2xl bg-white/5 text-white hover:bg-white/10 transition-all border border-white/10"
              >
                <LogOut className="w-5 h-5" />
              </button>
@@ -186,11 +203,11 @@ export default function Dashboard({ user }: { user: any }) {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="md:col-span-7 rounded-[2.5rem] bg-gradient-to-br from-indigo-600 to-violet-800 p-10 relative overflow-hidden group shadow-[0_20px_50px_rgba(79,70,229,0.2)]"
+            className="md:col-span-7 rounded-[2.5rem] bg-[#111111] border border-white/10 p-10 relative overflow-hidden group shadow-[0_20px_50px_rgba(255,255,255,0.05)]"
           >
             {/* Geometric Orbs */}
-            <div className="absolute top-[-10%] right-[-5%] w-64 h-64 bg-white/10 blur-[80px] rounded-full group-hover:bg-white/20 transition-all duration-700" />
-            <div className="absolute bottom-[-10%] left-[-5%] w-48 h-48 bg-black/20 blur-[60px] rounded-full" />
+            <div className="absolute top-[-10%] right-[-5%] w-64 h-64 bg-white/5 blur-[80px] rounded-full group-hover:bg-white/10 transition-all duration-700" />
+            <div className="absolute bottom-[-10%] left-[-5%] w-48 h-48 bg-white/5 blur-[60px] rounded-full" />
             
             <div className="relative z-10 h-full flex flex-col justify-between">
               <div className="flex justify-between items-start">
@@ -208,9 +225,9 @@ export default function Dashboard({ user }: { user: any }) {
 
               <div className="mt-20 flex flex-wrap gap-4">
                 <button 
-                  onClick={handleSend}
+                  onClick={() => handleSend()}
                   disabled={isSending || status !== 'connected'}
-                  className="bg-white text-indigo-900 px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-3 hover:scale-[1.05] active:scale-95 transition-all shadow-2xl disabled:opacity-50 disabled:hover:scale-100"
+                  className="bg-white text-black px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center gap-3 hover:scale-[1.05] active:scale-95 transition-all shadow-2xl shadow-white/10 disabled:opacity-50 disabled:hover:scale-100"
                 >
                   {isSending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                   {isSending ? 'Signing Payload...' : 'Authorize Transaction'}
@@ -235,11 +252,11 @@ export default function Dashboard({ user }: { user: any }) {
           >
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                <div className="p-3 rounded-2xl bg-white/5 border border-white/10 text-white">
                   <CreditCard className="w-6 h-6" />
                 </div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5 bg-emerald-400/10 px-3 py-1.5 rounded-full border border-emerald-400/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 neon-pulse" />
+                <div className="text-[10px] font-black uppercase tracking-widest text-white flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-full border border-white/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white neon-pulse" />
                   Hardware Secure
                 </div>
               </div>
@@ -257,24 +274,24 @@ export default function Dashboard({ user }: { user: any }) {
                 className="w-full flex items-center justify-between p-5 rounded-[1.5rem] bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] transition-all group"
                >
                  <div className="flex items-center gap-4">
-                    <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 group-hover:scale-110 transition-transform">
+                    <div className="p-2 rounded-xl bg-white/5 text-white group-hover:scale-110 transition-transform">
                       <Fingerprint className="w-5 h-5" />
                     </div>
                     <div>
                       <div className="text-xs font-black uppercase tracking-widest text-white/80">Key Management</div>
-                      <div className="text-[10px] text-white/30">1 Active Credential</div>
+                      <div className="text-[10px] text-white/30 truncate">Manage Devices</div>
                     </div>
                  </div>
                  <ChevronRight className="w-4 h-4 text-white/20 group-hover:translate-x-1 transition-transform" />
                </button>
                
                <div className="flex items-center gap-4 p-5 rounded-[1.5rem] bg-white/[0.01] border border-white/5 opacity-40">
-                  <div className="p-2 rounded-xl bg-violet-500/10 text-violet-400">
+                  <div className="p-2 rounded-xl bg-white/5 text-white">
                     <Zap className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="text-xs font-black uppercase tracking-widest">Guardian Nodes</div>
-                    <div className="text-[10px]">Unconfigured Layer</div>
+                    <div className="text-[10px] text-white/30">Unconfigured Layer</div>
                   </div>
                </div>
             </div>
@@ -289,7 +306,7 @@ export default function Dashboard({ user }: { user: any }) {
           >
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400">
+                <div className="p-2.5 rounded-xl bg-white/5 text-white">
                   <History className="w-5 h-5" />
                 </div>
                 <h3 className="text-xl font-outfit font-black uppercase tracking-tight">Recent Activity</h3>
@@ -315,7 +332,7 @@ export default function Dashboard({ user }: { user: any }) {
                       className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all cursor-pointer group"
                     >
                       <div className="flex items-center gap-4">
-                        <div className={`p-2.5 rounded-xl ${tx.from?.toLowerCase() === displayAddress.toLowerCase() ? 'bg-indigo-500/10 text-indigo-400' : 'bg-cyan-500/10 text-cyan-400'}`}>
+                        <div className={`p-2.5 rounded-xl border border-white/5 ${tx.from?.toLowerCase() === displayAddress.toLowerCase() ? 'bg-white/5 text-white/80' : 'bg-white/10 text-white'}`}>
                           {tx.from?.toLowerCase() === displayAddress.toLowerCase() ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownLeft className="w-4 h-4" />}
                         </div>
                         <div>
@@ -326,7 +343,7 @@ export default function Dashboard({ user }: { user: any }) {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className={`text-sm font-black ${tx.isError === '0' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <div className={`text-sm font-black ${tx.isError === '0' ? 'text-white' : 'text-white/40'}`}>
                           {tx.isError === '0' ? 'Confirmed' : 'Rejected'}
                         </div>
                         <div className="text-[10px] text-white/20 uppercase font-black">Polygon Amoy</div>
@@ -399,8 +416,8 @@ export default function Dashboard({ user }: { user: any }) {
               exit={{ opacity: 0, y: 50 }}
               className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl px-6"
             >
-              <div className="flex items-start gap-4 p-6 rounded-3xl bg-rose-500/10 border border-rose-500/20 text-rose-400 shadow-2xl backdrop-blur-2xl">
-                <AlertCircle className="w-6 h-6 shrink-0" />
+              <div className="flex items-start gap-4 p-6 rounded-3xl bg-[#111111] border border-[#ff3333] text-white shadow-2xl backdrop-blur-2xl">
+                <AlertCircle className="w-6 h-6 shrink-0 text-[#ff3333]" />
                 <div className="space-y-1">
                   <div className="text-sm font-black uppercase tracking-widest">Protocol Intelligence Exception</div>
                   <div className="text-xs font-medium leading-relaxed opacity-80">{sendError || lastError}</div>
@@ -412,26 +429,26 @@ export default function Dashboard({ user }: { user: any }) {
 
         {/* UserOp Success HUD */}
         <AnimatePresence>
-          {lastTxHash && (
+          {transactionState === 'mined' && lastTxHash && (
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 50 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 50 }}
               className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl px-6"
             >
-              <div className="flex items-center justify-between gap-6 p-6 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shadow-2xl backdrop-blur-2xl">
+              <div className="flex items-center justify-between gap-6 p-6 rounded-3xl bg-white border border-white/20 text-black shadow-2xl backdrop-blur-2xl">
                  <div className="flex items-center gap-4">
-                    <div className="p-2 rounded-xl bg-emerald-500/20">
+                    <div className="p-2 rounded-xl bg-black text-white">
                       <CheckCircle2 className="w-5 h-5" />
                     </div>
                     <div className="space-y-1">
-                      <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Success Confirmation</div>
-                      <div className="text-xs font-bold text-white">Biometric UserOperation Broadcast Complete</div>
+                       <div className="text-[10px] font-black uppercase tracking-widest opacity-60">Success Confirmation</div>
+                       <div className="text-xs font-bold">Biometric UserOperation Broadcast Complete</div>
                     </div>
                  </div>
                  <button
                     onClick={() => window.open(`https://jiffyscan.xyz/userOpHash/${lastTxHash}?network=polygon-amoy`, '_blank')}
-                    className="px-5 py-2.5 rounded-xl bg-emerald-500 text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition-all shadow-lg shadow-emerald-500/20"
+                    className="px-5 py-2.5 rounded-xl bg-black text-white font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition-all shadow-lg"
                   >
                     View Status
                  </button>

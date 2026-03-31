@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Fingerprint, Trash2, Smartphone, Monitor, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
+import { X, Fingerprint, Trash2, Smartphone, Monitor, ShieldCheck, AlertTriangle, Loader2, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { startRegistration } from '@simplewebauthn/browser';
 
 interface PasskeyModalProps {
   isOpen: boolean;
@@ -26,7 +27,8 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
     const { data } = await supabase
       .from('passkeys')
       .select('*')
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true }); // Ensure primary (oldest) is first
     
     if (data) setPasskeys(data);
     setLoading(false);
@@ -49,6 +51,48 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
       alert('Failed to delete passkey: ' + error.message);
     } else {
       fetchPasskeys();
+    }
+  };
+
+  const registerNewDevice = async () => {
+    if (passkeys.length >= 10) {
+      alert("Soft cap reached: You can only register up to 10 devices for security and performance reasons.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const optReq = await fetch('/api/auth/keys/register/generate-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+
+      if (!optReq.ok) {
+        throw new Error('Could not generate device registration options.');
+      }
+      
+      const options = await optReq.json();
+      const asseResp = await startRegistration({ optionsJSON: options });
+
+      const verifReq = await fetch('/api/auth/keys/register/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, response: asseResp }),
+      });
+
+      const verifResp = await verifReq.json();
+      if (!verifResp.verified) {
+        throw new Error(verifResp.error || 'Device enrollment rejected by verifier.');
+      }
+
+      await fetchPasskeys();
+      alert("Device seamlessly enrolled to your BioVault!");
+    } catch (e: any) {
+      console.error("[Add Device]", e);
+      alert(`Enrollment Failed: ${e.message}`);
+      setLoading(false);
     }
   };
 
@@ -78,21 +122,33 @@ export default function PasskeyModal({ isOpen, onClose, user }: PasskeyModalProp
               <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/10 blur-[90px] rounded-full -mr-20 -mt-20" />
               
               {/* Header */}
-              <div className="flex justify-between items-center mb-10 relative z-10">
+                <div className="flex justify-between items-center mb-10 relative z-10">
                 <div className="space-y-1">
                   <h2 className="text-3xl font-outfit font-black tracking-tight flex items-center gap-3">
                     Vault Enclave
                     <ShieldCheck className="w-6 h-6 text-indigo-400" />
                   </h2>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Registered Biometric Devices</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 truncate">
+                    Hardware Identities
+                  </p>
                 </div>
-                <button 
-                  onClick={onClose} 
-                  className="p-3 bg-white/[0.03] hover:bg-white/[0.08] rounded-2xl transition-all border border-white/5"
-                  disabled={loading}
-                >
-                  <X className="w-5 h-5 text-white/40" />
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={registerNewDevice} 
+                    disabled={loading}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 hover:text-indigo-200 rounded-xl transition-all border border-indigo-500/20 disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest leading-none">Add Device</span>
+                  </button>
+                  <button 
+                    onClick={onClose} 
+                    className="p-2.5 bg-white/[0.03] hover:bg-white/[0.08] rounded-xl transition-all border border-white/5"
+                    disabled={loading}
+                  >
+                    <X className="w-5 h-5 text-white/40" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4 relative z-10">
