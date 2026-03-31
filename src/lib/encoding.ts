@@ -42,9 +42,9 @@ export function toUint8Array(data: any): Uint8Array {
 
   // Case 4: String handling (Hex, Base64, or Base64URL)
   if (typeof data === "string") {
-    // 4a. Supabase/Postgres Hex format (\x7b or x7b)
-    if (data.startsWith('\\x') || data.startsWith('x')) {
-      const hex = data.startsWith('\\x') ? data.slice(2) : data.slice(1);
+    // 4a. Supabase/Postgres/Standard Hex format (\x7b, x7b, 0x7b, or 7b)
+    if (data.startsWith('\\x') || data.startsWith('x') || data.startsWith('0x') || (/^[0-9a-fA-F]+$/.test(data) && data.length % 2 === 0)) {
+      const hex = data.startsWith('\\x') || data.startsWith('0x') ? data.slice(2) : (data.startsWith('x') ? data.slice(1) : data);
       const decoded = Buffer.from(hex, 'hex');
       
       try {

@@ -2,22 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-/**
- * Converts a hex string (with or without 0x prefix) to a Uint8Array.
- * The DB stores COSE public keys as raw hex without the 0x prefix.
- */
-function hexToUint8Array(hex: string): Uint8Array {
-  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-  if (clean.length % 2 !== 0) throw new Error(`Odd-length hex string: ${clean.length} chars`);
-  const bytes = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
+import { toUint8Array } from '@/lib/encoding';
 
 // ─── Route ──────────────────────────────────────────────────────────────────
 
@@ -80,15 +65,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Username mismatch. Please use the correct account.' }, { status: 401 });
     }
 
-    // 4. ✅ KEY FIX: Convert COSE hex (stored without 0x prefix) → Uint8Array
+    // 4. ✅ KEY FIX: Use robust decoder (handles \x or 0x prefixes)
     // The DB stores the raw COSE-encoded public key as a hex string.
-    // `verifyAuthenticationResponse` requires the original COSE bytes, not PKCS/raw coords.
     let publicKeyBytes: Uint8Array;
     try {
-      publicKeyBytes = hexToUint8Array(passkey.public_key);
+      publicKeyBytes = toUint8Array(passkey.public_key);
       console.log('[Login/Verify] COSE key bytes decoded:', publicKeyBytes.length, 'bytes');
     } catch (decodeErr: any) {
-      console.error('[Login/Verify] COSE hex decode failed:', decodeErr.message);
+      console.error('[Login/Verify] COSE decode failed:', decodeErr.message);
       return NextResponse.json({
         error: 'Internal key format error',
         debug_hint: `COSE hex decode failed: ${decodeErr.message}`,
