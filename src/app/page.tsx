@@ -1,82 +1,159 @@
+'use client';
+
 import AuthPanel from '@/components/AuthPanel';
-import { ShieldCheck, Zap, Globe, Lock } from 'lucide-react';
+import { ShieldCheck, Zap, Globe, Lock, Fingerprint, ChevronRight, Binary, Shield } from 'lucide-react';
 import Image from 'next/image';
+import { motion } from 'framer-motion';
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#050505] text-white selection:bg-blue-500/30 overflow-x-hidden">
-      {/* Background Glows */}
+    <main className="min-h-screen bg-[#050505] text-white selection:bg-indigo-500/30 overflow-x-hidden font-inter">
+      {/* Dynamic Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/20 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[120px] rounded-full" />
+        <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-indigo-600/10 blur-[150px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] bg-violet-600/10 blur-[150px] rounded-full animate-pulse" style={{ animationDelay: '1s' }} />
+        <div className="absolute top-[30%] left-[40%] w-[30%] h-[30%] bg-cyan-500/5 blur-[120px] rounded-full" />
       </div>
 
-      <div className="relative z-10 container mx-auto px-6 pt-20 pb-32">
+      {/* Grid Pattern Overlay */}
+      <div className="fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay" />
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_2px_2px,rgba(255,255,255,0.02)_1px,transparent_0)] bg-[size:40px_40px] pointer-events-none" />
+
+      <div className="relative z-10 container mx-auto px-6 pt-8 pb-32">
         {/* Navigation */}
-        <nav className="flex items-center justify-between mb-24">
-          <div className="flex items-center gap-3">
-            <Image 
-              src="/bio_vault.svg" 
-              alt="BioVault Logo" 
-              width={48}
-              height={48}
-              className="object-contain"
-              priority
-            />
-            <span className="text-2xl font-black tracking-tighter bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
+        <header className="flex items-center justify-between mb-20">
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+            className="flex items-center gap-4"
+          >
+            <div className="relative group">
+              <div className="absolute -inset-2 bg-indigo-500/20 rounded-full blur-md group-hover:bg-indigo-500/40 transition-all duration-300" />
+              <Image 
+                src="/bio_vault.svg" 
+                alt="BioVault Logo" 
+                width={50}
+                height={50}
+                className="relative object-contain"
+                priority
+              />
+            </div>
+            <span className="text-3xl font-outfit font-black tracking-tight bg-gradient-to-br from-white to-white/40 bg-clip-text text-transparent">
               BioVault
             </span>
-          </div>
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-white/60">
-            <a href="#" className="hover:text-white transition-colors">Architecture</a>
-            <a href="#" className="hover:text-white transition-colors">Security</a>
-            <a href="#" className="hover:text-white transition-colors">Open Source</a>
-          </div>
-        </nav>
+          </motion.div>
+          
+          <motion.nav 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="hidden md:flex items-center gap-10 text-xs font-bold uppercase tracking-widest text-white/40"
+          >
+            <a href="#" className="hover:text-indigo-400 transition-colors uppercase">Network</a>
+            <a href="#" className="hover:text-indigo-400 transition-colors uppercase">Protocol</a>
+            <a href="#" className="hover:text-indigo-400 transition-colors uppercase">Security</a>
+            <div className="h-4 w-[1px] bg-white/10" />
+            <a href="https://github.com/Luckyhunt/Bio_Vault" target="_blank" className="flex items-center gap-2 hover:text-white transition-colors">
+              <Binary className="w-4 h-4" />
+              Source
+            </a>
+          </motion.nav>
+        </header>
 
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Hero Section */}
-          <div className="space-y-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-bold text-blue-400 uppercase tracking-wider">
-              <Zap className="w-3 h-3 fill-current" />
-              The Future of Web3 Security is Seedless
-            </div>
-            <h1 className="text-6xl md:text-8xl font-black tracking-tight leading-[0.9]">
-              Your Body is the <span className="bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Private Key.</span>
-            </h1>
-            <p className="text-xl text-white/50 max-w-lg leading-relaxed">
-              BioVault leverages hardware-grade biometric enclaves to create decentralized wallets. No seed phrases. No passwords. Just you.
-            </p>
+        <div className="grid lg:grid-cols-2 gap-20 items-center">
+          {/* Hero Content */}
+          <div className="space-y-10">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="space-y-6"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card border-indigo-500/20 text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">
+                <Shield className="w-3 h-3" />
+                Next-Gen Biometric Custody
+              </div>
+              
+              <h1 className="text-7xl md:text-[6.5rem] font-outfit font-black tracking-tighter leading-[0.85] text-white">
+                THE BODY IS THE <span className="text-indigo-500 inline-block relative">
+                  PRIVATE KEY
+                  <div className="absolute -bottom-4 left-0 w-full h-1.5 bg-indigo-500 rounded-full blur-[2px] opacity-20" />
+                </span>
+              </h1>
+              
+              <p className="text-lg text-white/50 max-w-lg leading-relaxed font-medium">
+                Eliminate seed phrases forever. BioVault leverages hardware secure enclaves to forge non-custodial wallets protected by the math of your own identity.
+              </p>
+            </motion.div>
             
-            <div className="grid grid-cols-2 gap-6 pt-4">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-white/5 border border-white/10 shrink-0">
-                  <Lock className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm">Passkey Native</h3>
-                  <p className="text-xs text-white/40">FIDO2 & WebAuthn standard</p>
-                </div>
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="flex flex-wrap gap-4"
+            >
+              <button className="btn-primary group flex items-center gap-3">
+                Initialize Secure Vault
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+              <button className="px-8 py-4 rounded-2xl border border-white/10 hover:bg-white/5 transition-all font-bold text-sm">
+                Explore Protocol
+              </button>
+            </motion.div>
+
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1, delay: 0.4 }}
+              className="grid grid-cols-2 md:grid-cols-3 gap-10 pt-8 border-t border-white/5"
+            >
+              <div className="space-y-2">
+                <div className="text-cyan-400 font-outfit font-black text-2xl">FIDO2</div>
+                <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest">WebAuthn Standard</div>
               </div>
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-white/5 border border-white/10 shrink-0">
-                  <Globe className="w-5 h-5 text-indigo-400" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm">ERC-4337 Ready</h3>
-                  <p className="text-xs text-white/40">Smart Account Abstraction</p>
-                </div>
+              <div className="space-y-2">
+                <div className="text-emerald-400 font-outfit font-black text-2xl">4337</div>
+                <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Account Abstraction</div>
               </div>
-            </div>
+              <div className="hidden md:block space-y-2">
+                <div className="text-indigo-400 font-outfit font-black text-2xl">P256</div>
+                <div className="text-[10px] font-bold text-white/30 uppercase tracking-widest">Enclave Verified</div>
+              </div>
+            </motion.div>
           </div>
 
-          {/* Auth Panel */}
-          <div className="relative">
-            <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-[2rem] blur-xl opacity-20" />
-            <AuthPanel />
-          </div>
+          {/* Auth Display Area */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            className="relative"
+          >
+            {/* Decorative Glow */}
+            <div className="absolute -inset-10 bg-indigo-500/10 blur-[100px] rounded-full pointer-events-none" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full border border-white/5 rounded-[3rem] animate-pulse pointer-events-none" />
+            
+            <div className="relative glass-card p-2 md:p-6 shadow-[0_0_80px_rgba(0,0,0,0.4)]">
+               <AuthPanel />
+            </div>
+
+            {/* Subtle Security Badge */}
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-full glass-card border-none text-[10px] font-bold text-emerald-400/60 uppercase tracking-widest">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 neon-pulse" />
+              Protocol Secured by Hardware Enclave
+            </div>
+          </motion.div>
         </div>
       </div>
+      
+      {/* Footer Branding */}
+      <footer className="container mx-auto px-6 py-12 flex justify-center opacity-20 hover:opacity-50 transition-opacity">
+        <div className="flex items-center gap-2 font-outfit font-black text-sm tracking-tighter grayscale">
+          <Image src="/bio_vault.svg" alt="BioVault" width={20} height={20} />
+          DECENTRALIZED IDENTITY SYSTEM v1.0
+        </div>
+      </footer>
     </main>
   );
 }

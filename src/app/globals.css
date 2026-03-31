@@ -1,35 +1,88 @@
 @import "tailwindcss";
 @source "../../src";
 
-
-
 :root {
   --background: #050505;
   --foreground: #ffffff;
+  
+  /* Brand Accents */
+  --accent-primary: #6366f1; /* Indigo 500 */
+  --accent-primary-glow: rgba(99, 102, 241, 0.5);
+  
+  --accent-secondary: #06b6d4; /* Cyan 500 */
+  --accent-secondary-glow: rgba(6, 182, 212, 0.5);
+  
+  --accent-secure: #10b981; /* Emerald 500 */
+  --accent-secure-glow: rgba(16, 185, 129, 0.5);
+
+  /* Glassmorphism Tokens */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 12px;
+
+  /* Animation Timings */
+  --transition-luxurious: 450ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-snappy: 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  body {
+    @apply text-white bg-[#050505] antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "ss01";
+  }
 }
 
-/* Custom Scrollbar */
+@layer components {
+  .glass-card {
+    @apply bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-[2.5rem] shadow-2xl;
+    backdrop-filter: blur(var(--glass-blur));
+    transition: var(--transition-luxurious);
+  }
+
+  .glass-card:hover {
+    @apply border-white/20 bg-white/[0.05];
+    box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  }
+
+  .btn-primary {
+    @apply relative overflow-hidden px-8 py-4 rounded-2xl font-bold transition-all duration-150 active:scale-95 text-white;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    box-shadow: 0 4px 15px var(--accent-primary-glow);
+  }
+
+  .btn-primary:hover {
+    @apply scale-[1.02] brightness-110 shadow-[0_8px_25px_var(--accent-primary-glow)];
+  }
+
+  .neon-pulse {
+    animation: neon-pulse 2s infinite;
+  }
+
+  @keyframes neon-pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+}
+
+/* Custom Scrollbar Override */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #050505;
+  @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a1a1a;
-  border-radius: 10px;
+  @apply bg-white/10 rounded-full transition-colors;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #252525;
+  @apply bg-white/20;
 }

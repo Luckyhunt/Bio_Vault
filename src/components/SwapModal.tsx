@@ -4,9 +4,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, ArrowDown, ShieldCheck, 
-  RefreshCw, Info 
+  RefreshCw, Info, Zap, Sparkles
 } from 'lucide-react';
-import Image from 'next/image';
 
 interface SwapModalProps {
   isOpen: boolean;
@@ -28,97 +27,137 @@ export default function SwapModal({ isOpen, onClose, onConfirm }: SwapModalProps
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+        <>
+          {/* Backdrop */}
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="w-full max-w-lg bg-zinc-900 border border-white/10 rounded-[2.5rem] p-8 shadow-2xl overflow-hidden relative"
-          >
-            {/* Background Glow */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[60px] rounded-full" />
-            
-            <div className="flex justify-between items-center mb-8 relative z-10">
-              <h2 className="text-2xl font-black tracking-tight flex items-center gap-2">
-                <RefreshCw className="w-6 h-6 text-indigo-400" />
-                DEX Swap
-              </h2>
-              <button 
-                onClick={onClose}
-                className="p-2 hover:bg-white/5 rounded-xl transition-colors"
-                disabled={isSwapping}
-              >
-                <X className="w-5 h-5 text-white/40" />
-              </button>
-            </div>
-
-            <div className="space-y-4 relative z-10">
-              {/* From Asset */}
-              <div className="p-6 rounded-3xl bg-white/5 border border-white/5 space-y-2">
-                <div className="flex justify-between items-center text-xs font-bold text-white/40 uppercase tracking-widest">
-                  <span>From</span>
-                  <span>Balance: $100.00</span>
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md"
+          />
+          
+          {/* Modal Container */}
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-6 pointer-events-none">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-lg bg-[#0a0a0a] border border-white/5 rounded-[3rem] p-10 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative overflow-hidden pointer-events-auto"
+            >
+              {/* Decorative Glows */}
+              <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/10 blur-[90px] rounded-full -mr-20 -mt-20" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-cyan-500/5 blur-[90px] rounded-full -ml-20 -mb-20" />
+              
+              {/* Header */}
+              <div className="flex justify-between items-center mb-10 relative z-10">
+                <div className="space-y-1">
+                  <h2 className="text-3xl font-outfit font-black tracking-tight flex items-center gap-3">
+                    Asset Swap
+                    <RefreshCw className="w-6 h-6 text-indigo-400" />
+                  </h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30">Protocol Liquidity Layer</p>
                 </div>
-                <div className="flex justify-between items-center">
-                  <input 
-                    type="number" 
-                    value={fromAmount}
-                    onChange={(e) => setFromAmount(e.target.value)}
-                    className="bg-transparent text-3xl font-black tracking-tighter outline-none w-full"
-                  />
-                  <div className="flex items-center gap-2 bg-white/5 px-3 py-2 rounded-xl border border-white/5">
-                    <span className="font-bold">USD</span>
+                <button 
+                  onClick={onClose}
+                  className="p-3 bg-white/[0.03] hover:bg-white/[0.08] rounded-2xl transition-all border border-white/5"
+                  disabled={isSwapping}
+                >
+                  <X className="w-5 h-5 text-white/40" />
+                </button>
+              </div>
+
+              <div className="space-y-6 relative z-10">
+                {/* From Asset */}
+                <div className="p-8 rounded-[2rem] bg-white/[0.02] border border-white/5 space-y-4 hover:bg-white/[0.04] transition-all duration-300">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Spending Asset</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400/60">Balance: $100.00</span>
+                  </div>
+                  <div className="flex justify-between items-center gap-4">
+                    <input 
+                      type="number" 
+                      value={fromAmount}
+                      onChange={(e) => setFromAmount(e.target.value)}
+                      className="bg-transparent text-5xl font-outfit font-black tracking-tighter outline-none w-full text-white placeholder:text-white/10"
+                    />
+                    <div className="flex items-center gap-3 bg-white/[0.05] px-5 py-3 rounded-2xl border border-white/10 shadow-xl">
+                      <div className="p-1.5 rounded-lg bg-indigo-500 text-white">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <span className="font-black text-sm tracking-tight">USD</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Arrow */}
-              <div className="flex justify-center -my-6 relative z-10">
-                <div className="p-3 bg-zinc-900 border border-white/10 rounded-2xl shadow-xl">
-                  <ArrowDown className="w-4 h-4 text-indigo-400" />
-                </div>
-              </div>
-
-              {/* To Asset */}
-              <div className="p-6 rounded-3xl bg-white/10 border border-white/10 space-y-2">
-                <div className="flex justify-between items-center text-xs font-bold text-white/40 uppercase tracking-widest">
-                  <span>To (Estimated)</span>
-                  <span>Pool: 12.5k MATIC</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="text-3xl font-black tracking-tighter opacity-80">{toAmount}</div>
-                  <div className="flex items-center gap-2 bg-indigo-500/20 px-3 py-2 rounded-xl border border-indigo-500/20">
-                    <span className="font-bold text-indigo-400">MATIC</span>
+                {/* Swap Icon */}
+                <div className="flex justify-center -my-10 relative z-20">
+                  <div className="p-4 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-[0_0_30px_rgba(99,102,241,0.2)]">
+                    <ArrowDown className="w-5 h-5 text-indigo-400" />
                   </div>
                 </div>
+
+                {/* To Asset */}
+                <div className="p-8 rounded-[2rem] bg-white/[0.03] border border-white/10 space-y-4 shadow-inner">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Acquiring (Est.)</span>
+                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-cyan-400">
+                      <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 neon-pulse" />
+                      Live Rates
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center gap-4">
+                    <div className="text-5xl font-outfit font-black tracking-tighter text-indigo-400">
+                      {toAmount}
+                    </div>
+                    <div className="flex items-center gap-3 bg-indigo-500/20 px-5 py-3 rounded-2xl border border-indigo-500/20 shadow-xl">
+                      <div className="p-1.5 rounded-lg bg-indigo-500 text-white">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <span className="font-black text-sm tracking-tight text-white">MATIC</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Protocol Info */}
+                <div className="p-5 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 flex gap-4">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 shrink-0">
+                    <Info className="w-4 h-4" />
+                  </div>
+                  <p className="text-[11px] text-white/40 leading-relaxed font-medium">
+                    Exchange executed via <span className="text-white/60">BioVault Aggregator</span>. 
+                    Network fees are <span className="text-emerald-400">fully sponsored</span> by the protocol paymaster.
+                  </p>
+                </div>
+
+                {/* CTA */}
+                <button 
+                  onClick={handleSwap}
+                  disabled={isSwapping}
+                  className="btn-primary w-full py-6 text-lg tracking-tight shadow-[0_15px_40px_rgba(79,70,229,0.3)]"
+                >
+                  <div className="flex items-center justify-center gap-3">
+                    {isSwapping ? (
+                      <RefreshCw className="w-6 h-6 animate-spin" />
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-6 h-6" />
+                        AUTHORIZE SWAP
+                      </>
+                    )}
+                  </div>
+                </button>
               </div>
 
-              {/* Info Box */}
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex gap-3">
-                <Info className="w-4 h-4 text-white/20 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-white/40 leading-relaxed font-medium">
-                  Slippage tolerance: 0.5%. Your gas is sponsored by BioVault Paymaster. No MATIC required for fee.
+              <div className="mt-8 text-center">
+                <p className="text-[9px] font-black uppercase tracking-[0.4em] text-white/10">
+                  Secure Biometric Authorization Required
                 </p>
               </div>
-
-              {/* Main Action */}
-              <button 
-                onClick={handleSwap}
-                disabled={isSwapping}
-                className="w-full py-5 mt-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-3xl font-black text-lg transition-all shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
-              >
-                {isSwapping ? (
-                  <RefreshCw className="w-6 h-6 animate-spin" />
-                ) : (
-                  <>
-                    <ShieldCheck className="w-6 h-6" />
-                    Authorize Swap
-                  </>
-                )}
-              </button>
-            </div>
-          </motion.div>
-        </div>
+            </motion.div>
+          </div>
+        </>
       )}
     </AnimatePresence>
   );
