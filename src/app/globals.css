@@ -51,46 +51,31 @@
   }
 }
 
-@layer components {
-  .sharp-card {
-    @apply bg-[var(--background)] border border-[var(--border)] rounded-[var(--radius-sharp)] p-6;
-    transition: border-color var(--transition-fast);
-  }
+.btn-solid {
+  @apply relative flex items-center justify-center px-6 py-3 rounded-[var(--radius-sharp)] font-bold text-xs uppercase tracking-widest transition-all duration-100 border border-[var(--border-strong)] bg-[var(--accent)] text-[var(--accent-fg)] hover:opacity-90;
+}
+.btn-solid:active {
+  @apply scale-[0.98];
+}
 
-  .sharp-card:hover {
-    @apply border-[var(--border-strong)];
-  }
+/* Outline Style */
+.btn-outline {
+  @apply relative flex items-center justify-center px-6 py-3 rounded-[var(--radius-sharp)] font-bold text-xs uppercase tracking-widest transition-all duration-100 border border-[var(--border-strong)] bg-transparent text-[var(--foreground)] hover:bg-[var(--muted)];
+}
+.btn-outline:active {
+  @apply scale-[0.98];
+}
 
-  .btn-elite {
-    @apply relative flex items-center justify-center px-6 py-3 rounded-[var(--radius-sharp)] font-bold text-xs uppercase tracking-widest transition-all duration-100 active:scale-[0.98];
-    @apply border border-[var(--border-strong)];
-  }
+.input-elite {
+  @apply w-full px-4 py-3 rounded-[var(--radius-sharp)] bg-transparent border border-[var(--border)] text-sm placeholder:text-[var(--muted-fg)] focus:outline-none focus:border-[var(--border-strong)] transition-all;
+}
 
-  /* Solid Style */
-  .btn-solid {
-    @apply btn-elite bg-[var(--accent)] text-[var(--accent-fg)];
-  }
-  
-  .btn-solid:hover {
-    @apply opacity-90;
-  }
+.skeleton {
+  @apply bg-[var(--muted)] animate-pulse;
+}
 
-  /* Outline Style */
-  .btn-outline {
-    @apply btn-elite bg-transparent text-[var(--foreground)];
-  }
-
-  .btn-outline:hover {
-    @apply bg-[var(--muted)];
-  }
-
-  .input-elite {
-    @apply w-full px-4 py-3 rounded-[var(--radius-sharp)] bg-transparent border border-[var(--border)] text-sm placeholder:text-[var(--muted-fg)] focus:outline-none focus:border-[var(--border-strong)] transition-all;
-  }
-
-  .skeleton {
-    @apply bg-[var(--muted)] animate-pulse;
-  }
+.sharp-card {
+  @apply bg-[var(--background)] border border-[var(--border)] rounded-[var(--radius-sharp)] p-6 transition-all duration-100 hover:border-[var(--border-strong)];
 }
 
 /* Scrollbar (Elite Style) */

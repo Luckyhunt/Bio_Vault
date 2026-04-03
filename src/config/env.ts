@@ -24,13 +24,17 @@ const publicEnvSchema = z.object({
   explorerUrl: z.string().url(),
   explorerTxUrl: z.string().url(),
   entryPoint: z.string().startsWith('0x'),
+  explorerApiUrl: z.string().url().default('https://api.etherscan.io/v2/api'),
+  explorerChainId: z.string().default('80002'),
   
   // External Links (Optional/Defaulted)
   githubUrl: z.string().url().default('https://github.com/Luckyhunt/Bio_Vault'),
+  jiffyscanUrl: z.string().url().default('https://jiffyscan.su/userOpHash'),
 });
 
 const serverEnvSchema = z.object({
   supabaseServiceKey: z.string().min(1),
+  etherscanApiKey: z.string().min(1),
 });
 
 // --- 2. VALIDATION -----------------------------------------------------------
@@ -50,6 +54,9 @@ const rawPublic = {
   explorerUrl: process.env.NEXT_PUBLIC_EXPLORER_URL,
   explorerTxUrl: process.env.NEXT_PUBLIC_EXPLORER_TX_URL,
   entryPoint: process.env.NEXT_PUBLIC_ENTRYPOINT,
+  explorerApiUrl: process.env.NEXT_PUBLIC_EXPLORER_API_URL,
+  explorerChainId: process.env.NEXT_PUBLIC_CHAIN_ID,
+  jiffyscanUrl: process.env.NEXT_PUBLIC_JIFFYSCAN_URL,
 };
 
 console.log('[Config Check] Raw Public Keys:', Object.keys(rawPublic).filter(k => !(rawPublic as any)[k]));
@@ -58,6 +65,7 @@ const _publicEnv = publicEnvSchema.safeParse(rawPublic);
 
 const rawServer = {
   supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  etherscanApiKey: process.env.ETHERSCAN_API_KEY,
 };
 
 console.log('[Config Check] Missing Server Keys:', Object.keys(rawServer).filter(k => !(rawServer as any)[k]));

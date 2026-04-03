@@ -34,7 +34,7 @@ export async function GET() {
       const smartAccountClient = createSmartAccountClient({
         account,
         chain,
-        bundlerTransport: http(SERVER_CONFIG.bundlerRpcUrl),
+        bundlerTransport: http(PUBLIC_CONFIG.bundlerRpcUrl),
         paymaster: bundlerClient,
         userOperation: {
           estimateFeesPerGas: async () => {
