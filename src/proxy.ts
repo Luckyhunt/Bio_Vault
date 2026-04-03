@@ -6,7 +6,7 @@ import { NextResponse, NextRequest } from 'next/server';
  * 🔒 BioVault Security Middleware (Elite Phase 2 - User Implementation)
  */
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const response = NextResponse.next();
 
   // ✅ Safe CSP Build (Direct Env Access for Edge Runtime)
