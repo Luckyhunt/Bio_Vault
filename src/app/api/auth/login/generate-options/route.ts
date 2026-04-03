@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
 import { rpID } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
-import { UsernameSchema } from '@/lib/schemas';
+import { LoginGenerateSchema, LoginVerifySchema } from '@/lib/schemas';
+import { PUBLIC_CONFIG, SERVER_CONFIG } from '@/config/env';
 
 
 
@@ -15,25 +16,21 @@ function sanitizeTransports(transports: any): any[] {
 }
 
 export async function POST(request: Request) {
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-  }
+  const SUPABASE_URL = PUBLIC_CONFIG.supabaseUrl;
+  const SUPABASE_KEY = SERVER_CONFIG.supabaseServiceKey;
 
   const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   try {
     const body = await request.json();
-    const result = UsernameSchema.safeParse(body);
+    const result = LoginGenerateSchema.safeParse(body);
 
     if (!result.success) {
       return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
     }
 
     const { username } = result.data;
-    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
 
     // 1. Get user
     const { data: profile, error: profileError } = await supabaseAdmin
@@ -116,6 +113,8 @@ export async function POST(request: Request) {
         .insert({
           challenge: options.challenge,
           type: 'authentication',
+          user_id: profile.id, // ✅ SECURITY: Bind challenge to unique user profile
+          used: false,
           expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(),
         });
 

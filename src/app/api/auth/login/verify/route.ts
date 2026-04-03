@@ -3,36 +3,37 @@ import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { rpID, origin } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
 import { toUint8Array } from '@/lib/encoding';
+import { LoginVerifySchema } from '@/lib/schemas';
 import crypto from 'crypto';
+import { PUBLIC_CONFIG, SERVER_CONFIG } from '@/config/env';
 
 // ─── Route ──────────────────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-  }
+  const SUPABASE_URL = PUBLIC_CONFIG.supabaseUrl;
+  const SUPABASE_KEY = SERVER_CONFIG.supabaseServiceKey;
 
   const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   try {
     const body = await request.json();
-    const { username, challenge, authenticationResponse } = body;
+    const result = LoginVerifySchema.safeParse(body);
 
-    if (!username || !challenge || !authenticationResponse) {
-      return NextResponse.json({ error: 'Missing required login data' }, { status: 400 });
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
     }
+
+    const { username, challenge, authenticationResponse } = result.data;
 
     const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    // 1. Fetch and validate challenge (check expiry)
+    // 1. Fetch and validate challenge (Elite Gap #2: Bound to User)
     const { data: challengeData } = await db
       .from('challenges')
       .select('*')
       .eq('challenge', challenge)
       .eq('type', 'authentication')
+      .eq('used', false)
       .single();
 
     if (!challengeData) {
@@ -113,8 +114,8 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // 6. Consume challenge immediately (one-time use)
-    await db.from('challenges').delete().eq('id', challengeData.id);
+    // 6. Mark challenge as used (Elite Gap #2)
+    await db.from('challenges').update({ used: true }).eq('id', challengeData.id);
 
     if (!verification.verified || !verification.authenticationInfo) {
       return NextResponse.json({ error: 'Biometric assertion returned false' }, { status: 401 });

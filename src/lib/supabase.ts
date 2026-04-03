@@ -1,6 +1,12 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_CONFIG } from '@/config/env';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+/**
+ * 🌍 Public Supabase Client
+ * Respects RLS and is safe for client-side usage.
+ */
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(
+  PUBLIC_CONFIG.supabaseUrl, 
+  PUBLIC_CONFIG.supabaseAnonKey
+);

@@ -13,12 +13,14 @@ export interface Transaction {
   methodName?: string;
 }
 
-const POLYGONSCAN_AMOY_API = 'https://api-amoy.polygonscan.com/api';
+import { PUBLIC_CONFIG } from '@/config/env';
+
+const POLYGONSCAN_AMOY_API = PUBLIC_CONFIG.explorerUrl + '/api';
 
 export async function getTransactionHistory(address: string): Promise<Transaction[]> {
   // Note: Using public API without key might be rate-limited, but works for testing.
   // In production, move the API key to .env
-  const url = `${POLYGONSCAN_AMOY_API}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=10&sort=desc&apikey=${process.env.NEXT_PUBLIC_POLYGONSCAN_API_KEY || ''}`;
+  const url = `${POLYGONSCAN_AMOY_API}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=10&sort=desc&apikey=${PUBLIC_CONFIG.polygonscanApiKey}`;
 
   try {
     const resp = await fetch(url);

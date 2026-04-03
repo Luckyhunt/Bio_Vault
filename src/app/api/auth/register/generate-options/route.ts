@@ -3,16 +3,13 @@ import { generateRegistrationOptions } from '@simplewebauthn/server';
 import { rpName, rpID } from '@/lib/webauthn';
 import { createClient } from '@supabase/supabase-js';
 import { UsernameSchema } from '@/lib/schemas';
+import { SERVER_CONFIG, PUBLIC_CONFIG } from '@/config/env';
 
 export async function POST(request: Request) {
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return NextResponse.json({ error: 'Vault initialization failed', debug_hint: 'Missing ENV' }, { status: 500 });
-  }
-
-  const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_KEY);
+  const supabaseAdmin = createClient(
+    PUBLIC_CONFIG.supabaseUrl,
+    SERVER_CONFIG.supabaseServiceKey
+  );
 
   try {
     const body = await request.json();

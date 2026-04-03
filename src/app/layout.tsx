@@ -30,9 +30,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${outfit.variable} ${inter.variable} h-full antialiased dark`}
+      className={`${outfit.variable} ${inter.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-inter selection:bg-indigo-500/30 selection:text-indigo-200">
+      <body className="min-h-full flex flex-col font-inter selection:bg-[var(--foreground)] selection:text-[var(--background)]">
         <LoadingScreen />
         <Providers>
           {children}

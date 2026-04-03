@@ -7,17 +7,14 @@ import { toBase64URL, toUint8Array } from '@/lib/encoding';
 import crypto from 'crypto';
 import { convertCOSEtoPKCS } from '@simplewebauthn/server/helpers';
 import { getSmartAccount } from '@/lib/smart-wallet';
+import { PUBLIC_CONFIG, SERVER_CONFIG } from '@/config/env';
 
 
 import { supabaseAdmin as adminClient } from '@/lib/supabase-admin';
 
 export async function POST(request: Request) {
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return NextResponse.json({ error: 'Vault initialization failed' }, { status: 500 });
-  }
+  const SUPABASE_URL = PUBLIC_CONFIG.supabaseUrl;
+  const SUPABASE_KEY = SERVER_CONFIG.supabaseServiceKey;
 
   const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 

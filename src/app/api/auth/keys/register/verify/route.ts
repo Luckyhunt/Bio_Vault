@@ -5,18 +5,26 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getPKCSFromCOSE } from '@/lib/webauthn-utils';
 import { toBase64URL } from '@/lib/encoding';
 
+import { RegistrationVerifySchema } from '@/lib/schemas';
+
 export async function POST(request: Request) {
   try {
-    const { userId, response } = await request.json();
+    const body = await request.json();
+    const result = RegistrationVerifySchema.safeParse(body);
 
-    if (!userId || !response?.id) {
-      return NextResponse.json({ error: 'User ID and WebAuthn response required.' }, { status: 400 });
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
     }
 
-    // 1. Fetch latest active challenge (Note: in prod, use challenge map / specific ID)
+    const { userId, response } = result.data;
+
+    // 1. Fetch the SPECIFIC challenge bound to this user (Elite Gap #2)
     const { data: challenges, error: challengeError } = await supabaseAdmin
       .from('challenges')
       .select('*')
+      .eq('user_id', userId)
+      .eq('type', 'registration')
+      .eq('used', false) // Ensure it hasn't been used yet
       .gt('expires_at', new Date().toISOString())
       .order('created_at', { ascending: false })
       .limit(1);
@@ -96,10 +104,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This device is already enrolled or failed to save.' }, { status: 500 });
     }
 
-    // 5. Cleanup the challenge to prevent replay
+    // 5. Mark the challenge as used (Elite Gap #2)
     await supabaseAdmin
       .from('challenges')
-      .delete()
+      .update({ used: true })
       .eq('id', currentChallenge.id);
 
     return NextResponse.json({ success: true, verified: true });

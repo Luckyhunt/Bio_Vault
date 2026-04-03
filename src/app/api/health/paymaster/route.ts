@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { bundlerClient, publicClient, getSmartAccount, chain } from '@/lib/smart-wallet';
 import { createSmartAccountClient } from 'permissionless';
 import { http, Hex } from 'viem';
+import { PUBLIC_CONFIG, SERVER_CONFIG } from '@/config/env';
 
 export async function GET() {
   try {
@@ -33,7 +34,7 @@ export async function GET() {
       const smartAccountClient = createSmartAccountClient({
         account,
         chain,
-        bundlerTransport: http(process.env.NEXT_PUBLIC_BUNDLER_RPC_URL!),
+        bundlerTransport: http(SERVER_CONFIG.bundlerRpcUrl),
         paymaster: bundlerClient,
         userOperation: {
           estimateFeesPerGas: async () => {

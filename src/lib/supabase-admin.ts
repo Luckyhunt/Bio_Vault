@@ -1,8 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
+import { PUBLIC_CONFIG, SERVER_CONFIG } from '@/config/env';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+/**
+ * 🔐 Supabase Admin Client (Service Role)
+ * Bypasses Row Level Security (RLS). 
+ * Use ONLY in Server Components or API Routes.
+ */
 
-// This client uses the Service Role Key, which bypasses RLS.
-// Use ONLY on the server (API routes).
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+export const supabaseAdmin = createClient(
+  PUBLIC_CONFIG.supabaseUrl, 
+  SERVER_CONFIG.supabaseServiceKey
+);

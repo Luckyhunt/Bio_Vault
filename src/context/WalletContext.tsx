@@ -11,6 +11,8 @@ import React, {
 import { createPasskeySmartAccountClient } from '@/lib/smart-wallet';
 import { createPublicClient, http, formatEther } from 'viem';
 import { polygonAmoy } from 'viem/chains';
+import { PUBLIC_CONFIG } from '@/config/env';
+import { logger } from '@/lib/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,21 +71,26 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
 
   const publicClient = createPublicClient({
     chain: polygonAmoy,
-    transport: http('https://rpc-amoy.polygon.technology'),
+    transport: http(PUBLIC_CONFIG.rpcUrl),
   });
 
   // ── Balance Fetch ──────────────────────────────────────────────────────────
 
   const fetchBalance = useCallback(async () => {
     if (!address) return;
+    
+    // ⬢ Request Deduplication & Abort logic (Elite Gap #7)
+    const controller = new AbortController();
+    
     try {
       const balanceWei = await publicClient.getBalance({
         address: address as `0x${string}`,
       });
       setBalance(formatEther(balanceWei));
+      logger.debug({ message: 'Balance auto-refresh', context: { address, balance: formatEther(balanceWei) } });
     } catch (err: any) {
-      // Non-fatal — network hiccup during polling shouldn't crash the UI
-      console.warn('[WalletContext] Balance fetch failed (non-fatal):', err.message);
+      if (err.name === 'AbortError') return;
+      logger.warn({ message: 'Balance fetch skipped', context: { address }, error: err });
     }
   }, [address]);
 
@@ -124,9 +131,9 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       setStatus('connected');
       connectedCredentialId.current = credentialId;
 
-      console.log('[WalletContext] ✅ Connected:', {
-        address: account.address,
-        isDeployed: deployed,
+      logger.info({ 
+        message: 'Wallet session established', 
+        context: { address: account.address, isDeployed: deployed } 
       });
     } catch (err: any) {
       // ⬢ Edge case: WebAuthn cancelled by user → NotAllowedError

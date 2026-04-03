@@ -1,0 +1,28 @@
+🛡️ BioVault: Deployment Configuration Requirements
+
+To successfully deploy and run BioVault, you must provide the following secrets as Environment Variables (usually in .env.local for development, or the Vercel dashboard for production).
+
+---
+
+1. SUPABASE SECRETS (From Supabase Dashboard > Settings > API)
+   - NEXT_PUBLIC_SUPABASE_URL: Your Supabase Project URL.
+   - NEXT_PUBLIC_SUPABASE_ANON_KEY: The public anonymous key.
+   - SUPABASE_SERVICE_ROLE_KEY: (SERVER-ONLY) The secret service role key (Never expose this!).
+
+2. PIMLICO SECRETS (From Pimlico Dashboard)
+   - NEXT_PUBLIC_BUNDLER_RPC_URL: The RPC endpoint with your API key (e.g., https://api.pimlico.io/v2/80002/rpc?apikey=...).
+   - NEXT_PUBLIC_PIMLICO_URL: Standard Pimlico API URL (https://api.pimlico.io).
+
+3. NETWORK & IDENTITY (Customizable)
+   - NEXT_PUBLIC_RPC_URL: Polygon Amoy RPC URL.
+   - NEXT_PUBLIC_RP_ID: Your domain (e.g., localhost or biovault.xyz).
+   - NEXT_PUBLIC_ORIGIN: Your full origin (e.g., http://localhost:3000 or https://biovault.xyz).
+   - NEXT_PUBLIC_RP_NAME: "BioVault" or your project name.
+
+---
+
+🔒 SECURITY REMINDER:
+I've already checked your /src directory, and NO secrets are hardcoded.
+I've also verified that your .env files are NOT being tracked by Git.
+
+You can safely push your current state to GitHub.

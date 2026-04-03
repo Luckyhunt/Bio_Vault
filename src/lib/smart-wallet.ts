@@ -9,6 +9,7 @@ import { createPimlicoClient } from 'permissionless/clients/pimlico';
 import { createSmartAccountClient } from 'permissionless';
 import { toUint8Array } from '@/lib/encoding';
 import { getPKCSFromCOSE } from '@/lib/webauthn-utils';
+import { PUBLIC_CONFIG, SERVER_CONFIG } from '@/config/env';
 
 // ==============================
 // 0. TYPES & ERRORS
@@ -50,16 +51,14 @@ export const chain = polygonAmoy;
 
 export const publicClient = createPublicClient({
   chain,
-  transport: http('https://rpc-amoy.polygon.technology'),
+  transport: http(PUBLIC_CONFIG.rpcUrl),
 });
-
-const bundlerRpcUrl = process.env.NEXT_PUBLIC_BUNDLER_RPC_URL!;
 
 export const bundlerClient = createPimlicoClient({
   chain,
-  transport: http(bundlerRpcUrl),
+  transport: http(PUBLIC_CONFIG.bundlerRpcUrl),
   entryPoint: {
-    address: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+    address: PUBLIC_CONFIG.entryPoint as `0x${string}`,
     version: '0.6',
   },
 });
@@ -76,13 +75,15 @@ export async function getSmartAccount(
   const idHex = isHex(credentialId) ? credentialId : toHex(toUint8Array(credentialId));
 
   // If the publicKey is a COSE blob (from our new DB standard), convert it to PKCS
-  // COSE keys are typically much longer than 65-byte PKCS keys.
+  // Normalize to hex with 0x prefix to robustly identify COSE blobs
+  const normalizedPubKey = publicKey.startsWith('0x') ? publicKey as Hex : `0x${publicKey}` as Hex;
+
   let pubKeyHex: Hex;
-  if (isHex(publicKey) && publicKey.length > 132) {
+  if (normalizedPubKey.length > 132) {
     // Looks like a COSE Hex string (PKCS is usually 130-132 chars with 0x)
-    pubKeyHex = getPKCSFromCOSE(publicKey);
+    pubKeyHex = getPKCSFromCOSE(normalizedPubKey);
   } else {
-    pubKeyHex = isHex(publicKey) ? publicKey : toHex(toUint8Array(publicKey));
+    pubKeyHex = normalizedPubKey;
   }
 
   console.log('[SmartWallet] Identity Sync:', {
@@ -133,7 +134,7 @@ export async function createPasskeySmartAccountClient(
   const client = createSmartAccountClient({
     account,
     chain,
-    bundlerTransport: http(bundlerRpcUrl),
+    bundlerTransport: http(PUBLIC_CONFIG.bundlerRpcUrl),
     paymaster: bundlerClient,
 
     userOperation: {

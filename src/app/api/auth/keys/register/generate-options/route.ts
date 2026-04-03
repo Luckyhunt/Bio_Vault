@@ -1,18 +1,25 @@
 import { NextResponse } from 'next/server';
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import { rpName, rpID } from '@/lib/webauthn';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createClient } from '@supabase/supabase-js';
+
+import { RegistrationGenerateSchema } from '@/lib/schemas';
+import { PUBLIC_CONFIG, SERVER_CONFIG } from '@/config/env';
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await request.json();
+    const body = await request.json();
+    const result = RegistrationGenerateSchema.safeParse(body);
 
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized. User ID required.' }, { status: 401 });
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0].message }, { status: 400 });
     }
 
+    const { userId } = result.data;
+
     // 1. Fetch user from profiles to get the username
-    const { data: profile } = await supabaseAdmin
+    const db = createClient(PUBLIC_CONFIG.supabaseUrl, SERVER_CONFIG.supabaseServiceKey);
+    const { data: profile } = await db
       .from('profiles')
       .select('username')
       .eq('id', userId)
@@ -23,7 +30,7 @@ export async function POST(request: Request) {
     }
 
     // 2. Fetch all existing passkeys for this user to exclude them
-    const { data: existingKeys } = await supabaseAdmin
+    const { data: existingKeys } = await db
       .from('passkeys')
       .select('id')
       .eq('user_id', userId);
@@ -49,11 +56,12 @@ export async function POST(request: Request) {
     });
 
     // 4. Store Challenge
-    const { error: challengeError } = await supabaseAdmin
+    const { error: challengeError } = await db
       .from('challenges')
       .insert({
         challenge: options.challenge,
-        type: 'registration', // We use standard registration type 
+        type: 'registration',
+        user_id: userId, // ✅ SECURITY: Bind challenge to unique user session
         expires_at: new Date(Date.now() + 1000 * 60 * 5).toISOString(),
       });
 
