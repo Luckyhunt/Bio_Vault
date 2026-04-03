@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       password: sessionToken
     });
 
-    const email = `${cleanUsername}@biovault.local`;
+    const email = `${cleanUsername}@biovault.app`;
 
     console.log('[Login/Verify] ✅ Login verification successful for:', cleanUsername);
 

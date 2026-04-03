@@ -93,7 +93,7 @@ export async function POST(request: Request) {
           length: publicKeyHex.length
         });
 
-        const email = `${cleanUsername}@biovault.local`;
+        const email = `${cleanUsername}@biovault.app`;
 
         // 5. DIAGNOSTIC BLOCK: Deterministic Smart Account Address
         let walletAddress: string;

@@ -29,7 +29,7 @@ export default function RegistrationForm({ onComplete }: RegistrationFormProps) 
     try {
       // 1. Get a new user ID from Supabase
       const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: `${username.toLowerCase()}@biovault.local`,
+        email: `${username.toLowerCase()}@biovault.app`,
         password: Math.random().toString(36), // Temporary password
       });
 
