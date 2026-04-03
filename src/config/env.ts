@@ -59,7 +59,9 @@ const rawPublic = {
   jiffyscanUrl: process.env.NEXT_PUBLIC_JIFFYSCAN_URL,
 };
 
-console.log('[Config Check] Raw Public Keys:', Object.keys(rawPublic).filter(k => !(rawPublic as any)[k]));
+if (typeof window === 'undefined') {
+  console.log('[Config Check] Raw Public Keys:', Object.keys(rawPublic).filter(k => !(rawPublic as any)[k]));
+}
 
 const _publicEnv = publicEnvSchema.safeParse(rawPublic);
 
@@ -68,7 +70,9 @@ const rawServer = {
   etherscanApiKey: process.env.ETHERSCAN_API_KEY,
 };
 
-console.log('[Config Check] Missing Server Keys:', Object.keys(rawServer).filter(k => !(rawServer as any)[k]));
+if (typeof window === 'undefined') {
+  console.log('[Config Check] Missing Server Keys:', Object.keys(rawServer).filter(k => !(rawServer as any)[k]));
+}
 
 const _serverEnv = serverEnvSchema.safeParse(rawServer);
 

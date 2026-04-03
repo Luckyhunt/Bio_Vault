@@ -128,6 +128,10 @@ NEXT_PUBLIC_CHAIN_ID=80002
 NEXT_PUBLIC_EXPLORER_TX_URL=https://amoy.polygonscan.com/tx/
 ```
 
+### 4. Initialize the Database
+Run the `supabase_schema.sql` script directly in your Supabase SQL Editor. 
+This script operates idempotently to deploy the advanced tables (`profiles`, `passkeys`, `challenges`), secure them via Row Level Security (RLS), and install our critical anti-replay attack logic (`consume_challenge` RPC) with zero data loss.
+
 ---
 
 ## 🔐 Security Architecture
