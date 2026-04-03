@@ -35,12 +35,15 @@ const serverEnvSchema = z.object({
 
 // --- 2. VALIDATION -----------------------------------------------------------
 
+const vUrl = process.env.NEXT_PUBLIC_VERCEL_URL || process.env.VERCEL_URL;
+const vOrigin = vUrl ? `https://${vUrl}` : undefined;
+
 const rawPublic = {
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
   supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  rpName: process.env.NEXT_PUBLIC_RP_NAME,
-  rpId: process.env.NEXT_PUBLIC_RP_ID,
-  origin: process.env.NEXT_PUBLIC_ORIGIN,
+  rpName: process.env.NEXT_PUBLIC_RP_NAME || 'BioVault',
+  rpId: process.env.NEXT_PUBLIC_RP_ID || vUrl || 'localhost',
+  origin: process.env.NEXT_PUBLIC_ORIGIN || vOrigin || 'http://localhost:3000',
   rpcUrl: process.env.NEXT_PUBLIC_RPC_URL,
   bundlerRpcUrl: process.env.NEXT_PUBLIC_BUNDLER_RPC_URL,
   pimlicoUrl: process.env.NEXT_PUBLIC_PIMLICO_URL,
