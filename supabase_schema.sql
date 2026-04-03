@@ -79,6 +79,14 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='challenges' AND column_name='expires_at') THEN
         ALTER TABLE public.challenges ADD COLUMN expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW() + INTERVAL '5 minutes';
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='challenges' AND column_name='used') THEN
+        ALTER TABLE public.challenges ADD COLUMN used BOOLEAN NOT NULL DEFAULT FALSE;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='challenges' AND column_name='type') THEN
+        ALTER TABLE public.challenges ADD COLUMN type TEXT NOT NULL DEFAULT 'registration' CHECK (type IN ('registration', 'login'));
+    END IF;
 END $$;
 
 -- ==========================================
